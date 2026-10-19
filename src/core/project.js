@@ -130,7 +130,7 @@ export class Project extends Emitter {
     const def = main && DEFS[main.type];
     const base = def?.system ? def.system(this.params(main.id)) : { Vph: 230, Vll: 400, f: 50, earth: 'TT' };
     const sp = main ? this.params(main.id) : {};
-    return { ...base, sys: sp.sys || (main?.type === 'genset' ? '3F' : '1F'), Pc: sp.Pc ?? null, Icc: sp.Icc ?? null, Re: sp.Re ?? null, sources: srcs.map((c) => c.tag), kind: main?.type || 'none' };
+    return { ...base, sys: sp.sys || (main && main.type !== 'supply' ? '3F' : '1F'), Pc: sp.Pc ?? null, Icc: sp.Icc ?? null, Re: sp.Re ?? null, sources: srcs.map((c) => c.tag), kind: main?.type || 'none' };
   }
 
   // ── Annulla / ripeti ──────────────────────────────────────────────────────────────
@@ -306,7 +306,7 @@ export class Project extends Emitter {
     return this.data.wires.filter((w) => sameEnd(w.a, ref) || sameEnd(w.b, ref));
   }
 
-  addWire(a, b, { color = 'brown', section = 1.5 } = {}) {
+  addWire(a, b, { color = 'brown', section = 1.5, n = 1 } = {}) {
     if (sameEnd(a, b)) return { error: 'Scegli due morsetti diversi.' };
     if (!this.terminal(a) || !this.terminal(b)) return { error: 'Morsetto non valido.' };
     if (this.data.wires.some((w) => (sameEnd(w.a, a) && sameEnd(w.b, b)) || (sameEnd(w.a, b) && sameEnd(w.b, a)))) {
@@ -314,6 +314,7 @@ export class Project extends Emitter {
     }
     this.checkpoint('Nuovo collegamento');
     const w = { id: 'w' + this.data.seq++, a: { ...a }, b: { ...b }, color, section };
+    if (n > 1) w.n = n; // conduttori in parallelo per fase (secondari dei trasformatori MT/BT)
     this.data.wires.push(w);
     this.emit('change', { type: 'wire-add', id: w.id });
     return { wire: w };

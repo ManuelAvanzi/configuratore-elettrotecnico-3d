@@ -15,7 +15,10 @@ const ACTIONS = {
   replaceCoil: { icon: 'wrench', label: () => 'Sostituisci bobina' },
   trigger: { icon: 'walk', label: () => 'Simula un passaggio' },
   resetEnergy: { icon: 'reset', label: () => 'Azzera energia' },
-  power: { icon: 'power', label: (s) => (s.limiter ? 'Riarma il contatore' : s.on ? 'Scollega l’impianto' : 'Alimenta l’impianto') },
+  power: { icon: 'power', label: (s, def) => (def.type === 'mtin' ? (s.on ? 'Togli tensione alla consegna' : 'Dai tensione alla consegna') : s.limiter ? 'Riarma il contatore' : s.on ? 'Scollega l’impianto' : 'Alimenta l’impianto') },
+  sez: { icon: 'toggle', label: (s) => (s.sez ? 'Apri il sezionatore di linea' : 'Chiudi il sezionatore di linea') },
+  int: { icon: 'plugzap', label: (s) => (s.int ? 'Apri l’interruttore' : 'Chiudi l’interruttore') },
+  terra: { icon: 'zap', label: (s) => (s.terra ? 'Apri il sezionatore di terra' : 'Chiudi il sezionatore di terra') },
   press: { icon: 'pointer', label: () => 'Premi', momentary: true },
   start: { icon: 'play', label: () => 'MARCIA', momentary: true },
   stop: { icon: 'pause', label: () => 'ARRESTO', momentary: true },
@@ -144,7 +147,7 @@ export class Inspector {
           const o = w.a.c === id && w.a.t === t.id ? w.b : w.a;
           const oc = project.comp(o.c);
           const ot = project.terminal(o);
-          return `${oc?.tag}:${ot?.label} (${colorById(w.color).label.toLowerCase()} ${fmt(w.section, 1)} mm²)`;
+          return `${oc?.tag}:${ot?.label} (${colorById(w.color).label.toLowerCase()} ${w.n > 1 ? w.n + '×' : ''}${fmt(w.section, 1)} mm²)`;
         });
         list.append(h('div', { class: 'term-item' },
           h('b', {}, t.label),
@@ -225,6 +228,12 @@ export class Inspector {
       el.append(h('div', { class: 'field' }, h('label', {}, 'Sezione'),
         h('select', { onchange: (e) => project.setWire(id, { section: +e.target.value }) },
           SECTIONS.map((s) => h('option', { value: s, selected: s === w.section }, `${fmt(s, 1)} mm² — portata ${fmt(iz(s, 2), 1)} A (monofase) · ${fmt(iz(s, 3), 1)} A (trifase)`)))));
+      if (w.section >= 95 || w.n > 1) {
+        el.append(h('div', { class: 'field' }, h('label', {}, 'Conduttori in parallelo per fase'),
+          h('select', { onchange: (e) => project.setWire(id, { n: +e.target.value > 1 ? +e.target.value : undefined }) },
+            [1, 2, 3, 4].map((k) => h('option', { value: k, selected: k === (w.n || 1) }, `${k} × ${fmt(w.section, 0)} mm² — portata ${fmt(iz(w.section, 3) * k, 0)} A (trifase)`))),
+          h('div', { class: 'help' }, 'Per le grandi correnti (secondario di un trasformatore MT/BT) si posano più cavi uguali per fase: la portata si somma (CEI 64-8 art. 523.6).')));
+      }
       const auto = w.lengthMode !== 'manual';
       const L = project.electricalLength(w);
       el.append(h('div', { class: 'field' }, h('label', {}, 'Lunghezza elettrica'),

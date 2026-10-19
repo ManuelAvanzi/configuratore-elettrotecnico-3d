@@ -3,7 +3,7 @@
 // carichi. Riferimento: ABB, Quaderno di applicazione tecnica n. 12 (sistemi navali), cap. 4, 6 e 7.
 import { source, res, sw, T, P, thermalUpdate, clamp } from './common.js';
 import { csub, cabs, cmul, cconj, power } from '../../sim/complex.js';
-import { SYSTEMS, GEN_K, sysOf, fmtV, fmtA, fmtW, fmt } from '../../sim/norms.js';
+import { SYSTEMS, BT_SYSTEMS, sysOptions, GEN_K, sysOf, fmtV, fmtA, fmtW, fmt } from '../../sim/norms.js';
 
 const PH = ['L1', 'L2', 'L3'];
 const INNER = ['#a', '#b', '#c'];
@@ -47,10 +47,12 @@ export const genset = {
     'motore grande fa calare la tensione.',
   params: [
     P.select('Sn', 'Potenza apparente Sn', [20, 30, 50, 100, 200, 400, 800, 1600], 100, { unit: 'kVA' }),
-    P.select('net', 'Tensione e frequenza', Object.values(SYSTEMS).map((s) => ({ value: s.id, label: s.label })), 'nave440'),
+    P.select('net', 'Tensione e frequenza', sysOptions(Object.values(SYSTEMS)), 'nave440', { help: 'In bassa tensione (440/690 V) il gruppo alimenta direttamente il quadro principale; in media tensione (6,6 o 11 kV, grandi navi) alimenta la sbarra MT e le utenze stanno a valle dei trasformatori di servizio MT/BT.' }),
+    P.select('bt', 'Rete BT a valle dei trasformatori di servizio', sysOptions(BT_SYSTEMS), 'nave440', { help: 'Solo per i gruppi in media tensione: il sistema di distribuzione BT visto dalle utenze (tensione e frequenza dei quadri di servizio).' }),
     P.select('earth', 'Neutro', [
       { value: 'IT', label: 'IT — neutro isolato da massa (tipico a bordo)' },
       { value: 'TN', label: 'TN — neutro collegato a massa (scafo)' },
+      { value: 'NR', label: 'Neutro a massa tramite resistenza (generatori MT: guasto a terra limitato a 50 A)' },
     ], 'IT'),
     P.select('xd', 'Reattanza subtransitoria X″d', [12, 15, 20], 15, { unit: '%', help: 'Impedenza interna dell’alternatore: determina la corrente di cortocircuito (≈ 5–8 In) e la caduta di tensione allo spunto dei motori.' }),
     P.bool('auto', 'Sincronizzatore automatico', true, { help: 'Con il sincronizzatore la chiusura su sbarra in tensione avviene solo a sincronismo raggiunto (qualche secondo). Senza, si può chiudere fuori fase: corrente di circolazione e intervento della protezione.' }),
@@ -74,6 +76,7 @@ export const genset = {
     PH.forEach((t, k) => els.push(sw('b' + t, INNER[k], t, s.closed)));
     els.push(sw('bN', '#g', 'N', s.closed));
     if (p.earth === 'TN') els.push(res('rn', '#g', 'GND', 1.0));
+    else if (p.earth === 'NR') els.push(res('rn', '#g', 'GND', r.sys.Vph / 50)); // resistenza di messa a terra: guasto a terra limitato a 50 A
     else els.push(res('rins', '#g', 'GND', p.Rins * 1000));
     els.push(res('re', 'PE', 'GND', p.Re));
     return els;
@@ -293,10 +296,15 @@ export const genset = {
       s.synced = false;
     }
   },
-  system: (p) => ({ ...(SYSTEMS[p.net] || SYSTEMS.nave440), earth: p.earth }),
+  system: (p) => {
+    const s = SYSTEMS[p.net] || SYSTEMS.nave440;
+    // gruppo in media tensione: le utenze vedono la rete BT dei trasformatori di servizio; la MT resta a monte
+    if (s.mt) return { ...(SYSTEMS[p.bt] || SYSTEMS.nave440), earth: p.earth, mtSys: s };
+    return { ...s, earth: p.earth };
+  },
   protection: (p) => {
     const r = gensetRated(p);
-    return { kind: 'generator', In: Math.round(r.In), curve: 'C', poles: [['#a', 'L1'], ['#b', 'L2'], ['#c', 'L3']], overcurrent: true };
+    return { kind: 'generator', In: Math.round(r.In), curve: 'C', poles: [['#a', 'L1'], ['#b', 'L2'], ['#c', 'L3']], overcurrent: true, mt: !!r.sys.mt };
   },
   paths: () => [],
   readouts(inst, ctx) {
@@ -507,7 +515,7 @@ export const shore = {
     'rete di banchina e poi si aprono senza interruzione. Il controllo della sequenza evita che i motori di bordo ' +
     'girino al contrario.',
   params: [
-    P.select('net', 'Tensione e frequenza della banchina', Object.values(SYSTEMS).map((s) => ({ value: s.id, label: s.label })), 'nave440'),
+    P.select('net', 'Tensione e frequenza della banchina', sysOptions(BT_SYSTEMS), 'nave440'),
     P.select('Pmax', 'Potenza disponibile dalla banchina', [20, 50, 100, 200, 500], 50, { unit: 'kW' }),
     P.select('Icc', 'Corrente di cortocircuito della banchina', [3, 6, 10], 6, { unit: 'kA' }),
     P.select('seq', 'Sequenza delle fasi della banchina', [

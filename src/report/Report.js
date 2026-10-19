@@ -80,7 +80,7 @@ export function openReport(app) {
     const a = `${p.comp(w.a.c)?.tag}:${p.terminal(w.a)?.label}`;
     const b = `${p.comp(w.b.c)?.tag}:${p.terminal(w.b)?.label}`;
     const col = colorById(w.color);
-    return `<tr><td>${i + 1}</td><td class="tag">${esc(a)}</td><td class="tag">${esc(b)}</td><td><span class="dot" style="background:${col.stripe ? `linear-gradient(135deg, ${col.hex} 50%, ${col.stripe} 50%)` : col.hex}"></span>${esc(col.label)}</td><td>${fmt(w.section, 1)} mm²</td><td>${fmt(p.electricalLength(w), p.electricalLength(w) < 1 ? 2 : 1)} m${w.lengthMode === 'manual' ? '' : ' (auto)'}</td></tr>`;
+    return `<tr><td>${i + 1}</td><td class="tag">${esc(a)}</td><td class="tag">${esc(b)}</td><td><span class="dot" style="background:${col.stripe ? `linear-gradient(135deg, ${col.hex} 50%, ${col.stripe} 50%)` : col.hex}"></span>${esc(col.label)}</td><td>${w.n > 1 ? w.n + '×' : ''}${fmt(w.section, 1)} mm²</td><td>${fmt(p.electricalLength(w), p.electricalLength(w) < 1 ? 2 : 1)} m${w.lengthMode === 'manual' ? '' : ' (auto)'}</td></tr>`;
   }).join('');
 
   // Verifiche

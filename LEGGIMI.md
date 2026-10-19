@@ -17,7 +17,8 @@ e, dal browser del visore (Meta Quest), in **realtà virtuale** con il pulsante 
 
 ### Il tutorial guidato
 
-Otto lezioni brevi (10–15 minuti), ognuna su un'operazione semplice; le ultime tre si svolgono a bordo di una nave:
+Nove lezioni brevi (10–15 minuti), ognuna su un'operazione semplice; tre si svolgono a bordo di una nave e l'ultima
+in una cabina MT/BT:
 
 1. **La tua prima lampada** — fase e neutro, magnetotermico, interruttore e lampada (si parte da zero).
 2. **Il differenziale ti protegge** — conduttore di terra, tasto di prova, guasto simulato su una lavatrice.
@@ -30,6 +31,9 @@ Otto lezioni brevi (10–15 minuti), ognuna su un'operazione semplice; le ultime
    carico, avaria di un gruppo.
 8. **Black-out!** — utenze essenziali, UPS a batteria, avviamento automatico del gruppo di emergenza,
    commutatore ATS e rientro della rete normale.
+9. **Dentro la cabina MT/BT** — consegna a 20 kV, celle con relè 50/51 e 51N, trasformatore in resina Dyn11,
+   corrente di inserzione, messa fuori servizio e rimessa in servizio di una cella con gli interblocchi (le cinque
+   regole della CEI 11-27).
 
 Ogni passo è di un tipo: *spiegazione* (si legge e si preme Avanti), *collegamento* (due morsetti evidenziati con i
 cerchi 1 e 2 e una freccia), *prova tu* (azionare una leva, un pulsante, dare corrente), *misura* e *domanda* (a
@@ -80,6 +84,10 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   *Black-out e porto* (percorso 3: UPS, gruppo di emergenza, ATS, presa di banchina) e *Neutro isolato e
   cortocircuito dei generatori* (percorso 4, con il docente: primo guasto a terra in IT, Icc con uno o due
   gruppi, spunto in isola, Icu/Icm da registro). La presentazione (percorso 5) vale anche per l'impianto di bordo.
+  Le **esercitazioni in media tensione** (etichetta “media tensione”): *Cabina MT/BT: messa in servizio e
+  protezioni selettive* (percorso 2: cavi MT e secondario con conduttori in parallelo, taratura del relè 50/51
+  sopra l'inserzione e selettivo con il generale BT, sequenza di messa fuori servizio con gli interblocchi) e
+  *Quadro MT di bordo: generatori a 6,6 kV e sbarra in isola* (percorso 4, con il docente).
 - **Modalità docente**: inserimento di guasti (dispersioni, massa franca, persona a contatto, cavo interrotto,
   morsetto allentato) e caricamento delle soluzioni.
 - **Giustificazione delle scelte** (pannello Progetto): quattro domande — fornitura e potenza, protezioni,
@@ -115,6 +123,27 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   (`?modello=nave-vuoto`) e “Traghetto: quadro a due semisbarre” (`?modello=traghetto`). Le isole di rete
   (sbarre) seguono ora solo conduttori, contatti chiusi e avvolgimenti: due semisbarre con il congiuntore aperto,
   o la sbarra di emergenza dietro l'ATS, sono isole distinte anche se condividono il PE.
+- **Media tensione (modulo B, fase B1 — cabina MT/BT)**: sistemi **20 kV 50 Hz**, 6,6 kV e 11 kV 60 Hz accanto
+  a quelli BT (il risolutore lavora in volt generici: la MT è un cambio di scala); **consegna MT del distributore**
+  con Icc presunta, corrente di guasto monofase a terra e dispersore di cabina; **cella MT** con sezionatore di
+  linea, interruttore, sezionatore di terra e relè di protezione ANSI 50 (I>>), 51 (I> a tempo) e 51N (corrente
+  omopolare), indicatori di presenza tensione e **interblocchi** di manovra (non si apre il sezionatore sotto
+  carico, non si mette a terra con il sezionatore chiuso o con tensione sul cavo); **trasformatore MT/BT in
+  resina** (Sn, vcc %, gruppo Dyn11/Dyn5/Yyn0 con trasformatori ideali del motore, neutro BT a terra o isolato,
+  **corrente di inserzione** ≈ 10 In per un decimo di secondo, sonde di temperatura); **interruttore scatolato
+  L-S-I** fino a 1600 A per il generale BT; **conduttori in parallelo per fase** nei cavi (secondari dei
+  trasformatori); verifiche “Media tensione” (Icu delle celle, 51N contro Ig, DG secondo CEI 0-16, tensione
+  totale di terra CEI 99-3, potenza del trasformatore, protezione MT sopra l'inserzione e selettiva, tenuta
+  2 s al guasto secondario, generale BT dimensionato su In2, **selettività MT/BT** amperometrica e cronometrica,
+  Icc al secondario con rete MT finita, ABB QT2); ambiente **cabina** in 3D (locale in calcestruzzo con griglie
+  di aerazione, tappeto isolante, collettore di terra, armadietto DPI, cartello delle cinque regole, porta
+  tagliafuoco). Modello predefinito “Cabina MT/BT a 20 kV” (`?modello=cabina`).
+- **Media tensione, fase B2 — quadro MT di bordo**: i gruppi elettrogeni accettano reti a 6,6 e 11 kV (con la
+  rete BT a valle dei trasformatori di servizio come parametro) e il neutro a terra tramite resistenza; celle di
+  generatore con relè 50/51/51N tarate per la rete in isola (Icc dei gruppi solo 6–7 In), sbarra MT, cella e
+  trasformatore di servizio 6,6 kV / 440 V con neutro BT isolato (il controllo dell'isolamento misura dal
+  centro stella del trasformatore). Modello “Quadro MT di bordo a 6,6 kV” (`?modello=nave-mt`), due esercitazioni
+  in media tensione e la lezione 9 del tutorial.
   La proposta completa dei moduli nautico e media tensione è in
   [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
 
@@ -143,7 +172,7 @@ Poi apri <http://localhost:5190> (homepage).
 | `npm run build` | versione da pubblicare nella cartella `dist/` (sito statico con le tre pagine) |
 | `npm run preview` | prova locale della versione `dist/` |
 | `npm run pubblica` | pubblica il sito su GitHub Pages (ramo `gh-pages`) |
-| `npm test` | tutti i collaudi: simulatore e verifiche (73 prove) + lezioni del tutorial (105 prove) + esercitazioni (60 prove) + modulo nautico (113 prove) |
+| `npm test` | tutti i collaudi: simulatore e verifiche (76 prove) + lezioni del tutorial (123 prove) + esercitazioni (66 prove) + modulo nautico (113 prove) + modulo media tensione (105 prove) |
 
 ### Provarlo sul visore (Meta Quest)
 
@@ -194,6 +223,17 @@ un Meta Quest 3 simulato (libreria IWER di Meta) permette di mostrare alla class
   sentina e antincendio da 15 kW, ventilazione del garage, cucina, aria condizionata e luci. Con il congiuntore
   aperto ogni gruppo alimenta la sua metà; chiudendolo i gruppi lavorano in parallelo e un gruppo regge tutta la
   nave (circa il 45 % del carico).
+- `?modello=cabina` — la cabina MT/BT di un'utenza industriale: consegna a 20 kV (Icc 12,5 kA, guasto a terra
+  50 A), cella DG con le regolazioni standard CEI 0-16, cella del trasformatore (51 a 15 A / 0,3 s, 50 a 250 A
+  sopra l'inserzione di 115 A e sopra il cortocircuito BT riportato al primario di 190 A), trasformatore in resina
+  400 kVA Dyn11 vcc 6 % (In2 577 A, Icc al secondario 9,5 kA), generale BT scatolato 630 A con S ritardata di
+  0,1 s, compressore 22 kW, pompa, prese e luci. La leva dell'armadio di consegna (o il pulsante in basso) dà
+  tensione; dalle Proprietà di ogni cella si manovrano sezionatore, interruttore e sezionatore di terra (anche
+  cliccando le leve sul fronte della cella) e si regola il relè; prova a mettere I>> a 60 A e a reinserire.
+- `?modello=nave-mt` — il quadro MT di una grande nave: due gruppi da 2 MVA a 6,6 kV 60 Hz con neutro a terra
+  tramite resistenza, celle di generatore, sbarra MT, cella e trasformatore di servizio 630 kVA 6,6 kV / 440 V
+  con neutro isolato, generale BT da 1000 A, controllo dell'isolamento, pompa antincendio, elica di manovra,
+  cucina e luci. “Avvia la centrale” mette i gruppi in parallelo sulla sbarra MT; le celle partono chiuse.
 - Il progetto in corso viene salvato automaticamente nel browser; *Salva* / *Apri* usano file `.impianto.json`.
 
 ---
@@ -209,12 +249,15 @@ src/
   home/          homepage: icone e schede delle lezioni
   tutorial/      lezioni (lessons.js), regia dei passi (Tutorial.js), segnaposti 3D (Markers.js), pannello (CoachUI.js)
   sim/           simulatore: numeri complessi, risolutore MNA, motore degli eventi, tabelle normative, verifiche
+                 (checks.js; mtchecks.js = verifiche della media tensione)
   catalog/defs/  definizione elettrica dei componenti (parametri, morsetti, elementi di circuito, logiche);
                  nautico.js = gruppo elettrogeno (anche di riserva e di emergenza), controllo isolamento,
-                 relè di distacco carichi, presa di banchina, commutatore ATS, UPS
+                 relè di distacco carichi, presa di banchina, commutatore ATS, UPS;
+                 mt.js = consegna MT, cella MT con interblocchi e relè 50/51/51N, trasformatore MT/BT,
+                 interruttore scatolato L-S-I
   models/        modelli 3D procedurali (DIN modulari e industriali, dispositivi di campo, serigrafie)
-  scene/         palcoscenico, aula e banco (World.js: tema 'aula' o 'nave' con setTheme), instradamento cavi,
-                 vista del progetto, copertine, ottimizzazione
+  scene/         palcoscenico, aula e banco (World.js: tema 'aula', 'nave' o 'cabina' con setTheme),
+                 instradamento cavi, vista del progetto, copertine, ottimizzazione
   interaction/   puntamento, strumenti (seleziona, cabla, misura, posiziona), mouse e tastiera
   ui/            interfaccia: barra, libreria, proprietà, verifiche, esercitazioni, LIM, presentazione
   xr/            realtà virtuale: sessione, controller, teletrasporto, tablet su canvas
@@ -229,7 +272,9 @@ public/img/      immagini della homepage e copertine delle lezioni (ricavate dal
 tests/           collaudo in Node: simulatore (sim.test.mjs), lezioni del tutorial (lessons.test.mjs),
                  esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove),
                  modulo nautico (nautico.test.mjs: sistema 440 V, IT, gruppi, parallelo, isola, distacco carichi,
-                 banchina, black-out con UPS/emergenza/ATS, verifiche da registro, modelli di bordo aggiuntivi)
+                 banchina, black-out con UPS/emergenza/ATS, verifiche da registro, modelli di bordo aggiuntivi),
+                 modulo media tensione (mt.test.mjs: sistemi MT, trasformatore, consegna e inserzione, interblocchi
+                 di cella, relè 50/51, scatolato L-S-I e selettività MT/BT, verifiche CEI 0-16, quadro MT di bordo)
 ```
 
 La parte elettrica (`src/sim`, `src/catalog/defs`, `src/core`) non dipende da Three.js: si collauda in Node e si può
@@ -306,17 +351,28 @@ La homepage e l'elenco delle lezioni del tutorial si aggiornano da soli.
   termico a tempo inverso; limitatore del contatore oltre il 10% dopo alcuni secondi. La simulazione si può
   accelerare (×5, ×20) per osservare gli interventi termici.
 - Carichi a impedenza costante; motore con impedenza di rotore bloccato all'avviamento (≈ 6·In).
+- Media tensione: la consegna è una sorgente trifase con l'impedenza ricavata dalla Icc presunta (X/R ≈ 3) e il
+  neutro del distributore chiuso su un'impedenza che limita il guasto monofase a terra a Ig; il trasformatore è
+  fatto di tre trasformatori ideali (primario a triangolo o a stella secondo il gruppo) con l'impedenza di
+  cortocircuito vcc·Vll²/Sn sul secondario (X/R ≈ 5); la corrente di inserzione è un'impedenza di
+  magnetizzazione inserita per 0,15 s (≈ 10 In); il relè della cella ha soglie a tempo definito (50, 51, 51N su
+  3Io); lo sganciatore L-S-I ha L termica su Ir, S a tempo definito, I istantanea. La Icc al secondario tiene conto
+  della potenza di cortocircuito della rete MT (In2 / (vcc + Sn/Scc)). Le regolazioni standard del DG e i limiti di
+  tensione di terra sono quelli tipici della CEI 0-16 e della CEI 99-3 in forma semplificata.
 - Le verifiche seguono CEI 64-8, CEI EN 60898-1, CEI EN 61008/61009 in forma semplificata: sono uno strumento
   didattico, non sostituiscono il progetto di un impianto reale. Per gli impianti di bordo le prescrizioni dei
   registri navali (controllo isolamento in IT, riserva n−1, protezione di generatore) sono riportate in forma
-  semplificata dal quaderno ABB QT12.
+  semplificata dal quaderno ABB QT12; per la cabina MT/BT i criteri di dimensionamento e selettività dal
+  quaderno ABB QT2.
 
 ---
 
 ## Prossimi passi (proposta)
 
-- **Impianti di bordo (nautico) e media tensione**: proposta dettagliata, con le idee ricavate dal quaderno ABB
-  QT12, in [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
+- **Impianti di bordo (nautico) e media tensione**: i moduli A (fasi A1–A3) e B (fasi B1–B2) della proposta in
+  [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md) sono realizzati; restano
+  le idee più avanzate (propulsione elettrica esplorabile, HVSC in porto, guasto a terra in MT con un elemento di
+  guasto sui cavi MT, curve tempo-corrente sulla LIM, DPI e cartelli come oggetti della procedura in VR).
 
 - Modalità **multiutente**: docente e studenti sullo stesso banco (visore + PC + LIM sincronizzati).
 - **Schema unifilare/multifilare** generato automaticamente dal cablaggio, anche nella scheda tecnica.

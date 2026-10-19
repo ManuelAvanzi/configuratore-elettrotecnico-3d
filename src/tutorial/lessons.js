@@ -5,7 +5,7 @@
 //   enter(ctx) (all'ingresso), buttons [{label, icon, run(ctx)}], options (quiz), schema (disegno).
 // Le funzioni ricevono un contesto `ctx` con progetto e simulatore (vedi makeContext).
 import { build } from '../presets/builder.js';
-import { nave } from '../presets/index.js';
+import { nave, cabina } from '../presets/index.js';
 
 // ── Disegni semplici per le spiegazioni ─────────────────────────────────────────────
 const COL = { L: '#8a4b26', N: '#1f64c8', PE: '#2f9a3a', box: '#ff5900', ink: '#1d2127' };
@@ -207,6 +207,12 @@ function startParalleloBordo() {
 function startBlackoutBordo() {
   const d = nave();
   d.meta.title = 'Tutorial · Black-out!';
+  return d;
+}
+
+function startCabinaMT() {
+  const d = cabina();
+  d.meta.title = 'Tutorial · Dentro la cabina MT/BT';
   return d;
 }
 
@@ -1094,6 +1100,162 @@ export const LESSONS = [
         title: 'Hai gestito un black-out!',
         text: 'Hai visto la sequenza automatica che tiene al sicuro una nave quando manca l’energia.',
         recap: ['Le utenze essenziali stanno sul quadro di emergenza, dietro un commutatore automatico.', 'L’UPS copre i secondi di avviamento del gruppo di emergenza.', 'Il gruppo di emergenza parte, chiude e si ferma da solo; l’alimentazione torna entro 45 s.'],
+        view: 'panoramica',
+      },
+    ],
+  },
+
+  {
+    id: 'cabina-mt',
+    n: 9,
+    title: 'Dentro la cabina MT/BT',
+    subtitle: 'La consegna a 20 kV, le celle con gli interblocchi, il trasformatore: metti fuori servizio una cella in sicurezza',
+    duration: '15 minuti',
+    level: 'Avanzato',
+    icon: 'zap',
+    color: '#b3262c',
+    cover: 'img/lezione-cabina-mt.jpg',
+    goals: ['Riconoscere consegna, celle MT, trasformatore e quadro BT', 'Capire la corrente di inserzione e la soglia rapida del relè', 'Eseguire le cinque regole con gli interblocchi della cella'],
+    start: startCabinaMT,
+    steps: [
+      {
+        type: 'info',
+        title: 'Benvenuto in cabina',
+        text: 'Siamo nella cabina di trasformazione di un’azienda. L’energia arriva dal distributore a 20 kV (media tensione) nell’armadio di consegna XM; il quadro MT con le celle QM1 e QM2 la porta al trasformatore T1, che la abbassa a 400 V per il quadro BT con le utenze.',
+        todo: 'Premi Avanti.',
+        view: 'panoramica',
+        focus: ['XM', 'QM1', 'QM2', 'T1'],
+      },
+      {
+        type: 'info',
+        title: 'Le celle del quadro MT',
+        text: 'Ogni cella ha un sezionatore di linea in alto, l’interruttore con il relè di protezione al centro e un sezionatore di terra sul lato cavo. QM1 è il dispositivo generale (DG) richiesto dalla CEI 0-16; QM2 protegge il trasformatore. Il relè apre l’interruttore per sovracorrente (51), cortocircuito (50) e guasto a terra (51N).',
+        why: 'In media tensione non si lavora mai sotto tensione: gli interblocchi meccanici impediscono le manovre nell’ordine sbagliato.',
+        focus: ['QM1', 'QM2'],
+      },
+      {
+        type: 'info',
+        title: 'Il trasformatore in resina',
+        text: 'T1 è un trasformatore da 400 kVA, 20 kV / 400 V, gruppo Dyn11: primario a triangolo, secondario a stella con il neutro, che qui è collegato a terra (sistema TN-S). Al secondario a pieno carico circolano 577 A: per questo i cavi verso il generale QG sono due da 240 mm² per fase.',
+        focus: ['T1', 'QG'],
+      },
+      {
+        type: 'action',
+        title: 'Dai tensione alla consegna',
+        text: 'Il distributore mette in tensione la consegna. Le celle sono chiuse: il trasformatore si inserisce e per un decimo di secondo assorbe la corrente di magnetizzazione, circa dieci volte la sua corrente nominale.',
+        todo: 'Clicca la leva rossa dell’armadio di consegna (a sinistra del quadro) oppure il pulsante qui sotto.',
+        focus: ['meter'],
+        target: { power: true },
+        buttons: [{ label: 'Dai tensione alla consegna', icon: 'power', run: (c) => c.power(true) }],
+        done: (c) => c.powered() && !!c.st('T1').live,
+        perform: (c) => c.power(true),
+      },
+      {
+        type: 'quiz',
+        title: 'Perché la soglia rapida I>> di QM2 è a 250 A?',
+        text: 'La corrente nominale al primario del trasformatore è solo 11,5 A. Guarda il registro degli eventi: all’inserzione è comparsa la corrente di magnetizzazione.',
+        focus: ['QM2', 'T1'],
+        options: [
+          { text: 'Perché all’inserzione il trasformatore assorbe circa 10 volte la corrente nominale (115 A) per un decimo di secondo, e la soglia deve stare sopra anche al cortocircuito BT riportato al primario (190 A)', correct: true, feedback: 'Esatto: con una soglia più bassa il relè scatterebbe a ogni inserzione, e un guasto in bassa tensione farebbe aprire la MT invece del generale BT.' },
+          { text: 'Perché il relè non riesce a misurare correnti più piccole', feedback: 'No: il relè misura anche pochi ampere (la 51N è regolata a 2 A). La soglia è una scelta di coordinamento.' },
+          { text: 'Perché 250 A è la corrente nominale del trasformatore', feedback: 'No: la corrente nominale al primario è 11,5 A (400 kVA diviso √3 per 20 kV).' },
+        ],
+      },
+      {
+        type: 'action',
+        title: 'Fuori servizio (1): apri l’interruttore',
+        text: 'Dobbiamo lavorare sul trasformatore: mettiamo fuori servizio la cella QM2 seguendo le cinque regole della CEI 11-27. Prima si interrompe la corrente con l’interruttore: è l’unico apparecchio che può aprire sotto carico.',
+        todo: 'Clicca i pulsanti I/O della cella QM2 (oppure “Apri l’interruttore” nelle sue Proprietà).',
+        focus: ['QM2'],
+        target: { tag: 'QM2', action: 'int' },
+        done: (c) => !c.st('QM2').int,
+        perform: (c) => c.act('QM2', 'int'),
+      },
+      {
+        type: 'action',
+        title: 'Regola 1: sezionare',
+        text: 'Ora si apre il sezionatore di linea, che separa visibilmente la cella dalla sbarra. Prova a farlo prima dell’interruttore: l’interblocco lo impedisce.',
+        todo: 'Clicca la leva nera del sezionatore di QM2 (oppure “Apri il sezionatore di linea”).',
+        why: 'Il sezionatore non sa interrompere la corrente: aprendolo sotto carico si innescherebbe un arco. Per questo si manovra solo con l’interruttore aperto (regola 2: assicurare contro la richiusura).',
+        focus: ['QM2'],
+        target: { tag: 'QM2', action: 'sez' },
+        done: (c) => !c.st('QM2').sez,
+        perform: (c) => c.act('QM2', 'sez'),
+      },
+      {
+        type: 'quiz',
+        title: 'Regola 3: verificare l’assenza di tensione',
+        text: 'Gli indicatori di presenza tensione (VPIS) sul lato cavo di QM2 sono spenti. Che cosa fai prima di mettere a terra?',
+        focus: ['QM2'],
+        options: [
+          { text: 'Verifico l’assenza di tensione con gli indicatori della cella e con un rivelatore, e solo allora chiudo il sezionatore di terra', correct: true, feedback: 'Esatto: la messa a terra si fa solo dopo aver verificato che non ci sia tensione, con i DPI (guanti isolanti, fioretto).' },
+          { text: 'Tocco il cavo con la mano per sentire se c’è tensione', feedback: 'Mai: in media tensione il contatto è mortale. Si usano gli strumenti e i DPI.' },
+          { text: 'Chiudo subito il sezionatore di terra: tanto l’interblocco mi protegge', feedback: 'L’interblocco aiuta, ma non sostituisce la verifica: un’alimentazione dal lato utenza (un generatore) potrebbe tenere in tensione il cavo.' },
+        ],
+      },
+      {
+        type: 'action',
+        title: 'Regola 4: mettere a terra e in cortocircuito',
+        text: 'Con la cella sezionata e senza tensione, il sezionatore di terra collega i cavi a terra: se per errore tornasse tensione, scatterebbero le protezioni a monte invece di folgorare chi lavora.',
+        todo: 'Clicca la leva gialla del sezionatore di terra di QM2 (oppure “Chiudi il sezionatore di terra”).',
+        focus: ['QM2'],
+        target: { tag: 'QM2', action: 'terra' },
+        done: (c) => !!c.st('QM2').terra,
+        perform: (c) => c.act('QM2', 'terra'),
+      },
+      {
+        type: 'info',
+        title: 'Regola 5: si può lavorare',
+        text: 'Cartelli “lavori in corso” sulla cella, chiave in tasca, parti attive vicine protette: ora il trasformatore è fuori servizio e messo a terra. Il quadro BT è senza tensione: in un’azienda vera si sceglie l’orario di fermo o si usa un gruppo elettrogeno.',
+        focus: ['QM2', 'T1'],
+      },
+      {
+        type: 'action',
+        title: 'Rimetti in servizio (1): apri la terra',
+        text: 'Finiti i lavori si ripercorre la sequenza al contrario: prima si toglie la messa a terra.',
+        todo: 'Clicca di nuovo la leva gialla del sezionatore di terra.',
+        focus: ['QM2'],
+        target: { tag: 'QM2', action: 'terra' },
+        done: (c) => !c.st('QM2').terra,
+        perform: (c) => c.act('QM2', 'terra'),
+      },
+      {
+        type: 'action',
+        title: 'Rimetti in servizio (2): chiudi il sezionatore',
+        text: 'Il sezionatore di linea si può chiudere solo con il sezionatore di terra aperto: altrimenti chiuderebbe un cortocircuito verso terra.',
+        todo: 'Clicca la leva nera del sezionatore di linea.',
+        focus: ['QM2'],
+        target: { tag: 'QM2', action: 'sez' },
+        done: (c) => !!c.st('QM2').sez,
+        perform: (c) => c.act('QM2', 'sez'),
+      },
+      {
+        type: 'action',
+        title: 'Rimetti in servizio (3): chiudi l’interruttore',
+        text: 'Ultima manovra: l’interruttore. Il trasformatore si inserisce di nuovo (corrente di magnetizzazione) e il quadro BT torna in tensione.',
+        todo: 'Clicca il pulsante I della cella QM2.',
+        focus: ['QM2', 'T1'],
+        target: { tag: 'QM2', action: 'int' },
+        done: (c) => !!c.st('QM2').int && !!c.st('T1').live,
+        perform: (c) => c.act('QM2', 'int'),
+        settle: 0.5,
+      },
+      {
+        type: 'quiz',
+        title: 'Quanta corrente circola al secondario a pieno carico?',
+        text: 'T1 è da 400 kVA con secondario a 400 V.',
+        focus: ['T1'],
+        options: [
+          { text: '577 A: 400 000 VA diviso √3 per 400 V', correct: true, feedback: 'Esatto: per questo il generale QG è un interruttore scatolato da 630 A con Ir regolata a 598 A.' },
+          { text: '11,5 A: la stessa corrente del primario', feedback: 'No: 11,5 A è la corrente al primario a 20 kV. Al secondario la tensione è 50 volte più bassa e la corrente 50 volte più alta.' },
+          { text: '1000 A: il doppio della corrente di inserzione', feedback: 'No: la corrente di inserzione riguarda il primario e dura un decimo di secondo.' },
+        ],
+      },
+      {
+        type: 'end',
+        title: 'La cabina è di nuovo in servizio!',
+        text: 'Hai messo fuori servizio e rimesso in servizio una cella MT rispettando le cinque regole.',
+        recap: ['L’energia arriva a 20 kV: DG, cella del trasformatore con relè 50/51 e 51N, trasformatore Dyn11, generale BT scatolato.', 'La soglia rapida del relè sta sopra la corrente di inserzione e sopra il cortocircuito BT riportato al primario; la 51 è ritardata per la selettività con il generale BT.', 'Fuori servizio: interruttore → sezionatore → verifica assenza tensione → terra. In servizio: al contrario. Gli interblocchi impediscono l’ordine sbagliato.'],
         view: 'panoramica',
       },
     ],

@@ -15,10 +15,26 @@ export const SYSTEMS = {
   it230: { id: 'it230', label: '230/400 V · 50 Hz (rete pubblica)', Vph: 230, Vll: 400, f: 50 },
   nave440: { id: 'nave440', label: '254/440 V · 60 Hz (bordo nave)', Vph: 254, Vll: 440, f: 60 },
   nave690: { id: 'nave690', label: '400/690 V · 60 Hz (bordo nave, distribuzione primaria)', Vph: 400, Vll: 690, f: 60 },
+  // media tensione (modulo B): il simulatore lavora in volt generici, la MT è solo un cambio di scala
+  mt20: { id: 'mt20', label: '20 kV · 50 Hz (media tensione, consegna del distributore)', Vph: 11547, Vll: 20000, f: 50, mt: true },
+  mt66: { id: 'mt66', label: '6,6 kV · 60 Hz (media tensione di bordo)', Vph: 3811, Vll: 6600, f: 60, mt: true },
+  mt11: { id: 'mt11', label: '11 kV · 60 Hz (media tensione di bordo, grandi navi)', Vph: 6351, Vll: 11000, f: 60, mt: true },
 };
+/** Sistemi di bassa tensione (utenze, quadri BT) e di media tensione (consegna, generatori e sbarre MT) */
+export const BT_SYSTEMS = Object.values(SYSTEMS).filter((s) => !s.mt);
+export const MT_SYSTEMS = Object.values(SYSTEMS).filter((s) => s.mt);
+export const isMT = (sys) => !!(sys && sys.mt === true);
+/** Opzioni per i parametri “tensione e frequenza” */
+export const sysOptions = (list) => list.map((s) => ({ value: s.id, label: s.label }));
 export const DEFAULT_SYS = { ...SYSTEMS.it230, earth: 'TT', fBus: 50 };
-/** Sistema di rete corrente (dall'ambiente del simulatore), con i valori di default se manca */
+/**
+ * Sistema di rete corrente (dall'ambiente del simulatore), con i valori di default se manca. Quando l'energia
+ * arriva in media tensione (consegna MT o generatori MT) `env.sys` resta il sistema BT visto dalle utenze a
+ * valle dei trasformatori e `env.sys.mtSys` è il sistema MT a monte.
+ */
 export const sysOf = (env) => (env && env.sys) || DEFAULT_SYS;
+/** Sistema MT a monte (se c'è) */
+export const mtSysOf = (env) => (env && env.sys && env.sys.mtSys) || null;
 
 /** Costante termica della protezione di generatore: 1,5·In → intervento in ~2 minuti (registri navali) */
 export const GEN_K = 138;
@@ -30,15 +46,16 @@ export const RHO_CU = 0.0214;
 export const R_CONTACT = 1e-3;
 
 /** Sezioni commerciali [mm²] (fino a 16 per gli impianti civili; oltre, per le linee di generazione e di bordo) */
-export const SECTIONS = [1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120];
+export const SECTIONS = [1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120, 150, 185, 240];
 
 /**
  * Portata Iz [A] — cavi unipolari in PVC in tubo su parete (metodo B1), 30 °C.
  * `2`: circuiti monofase (2 conduttori caricati) · `3`: circuiti trifase (3 conduttori caricati)
+ * (oltre 120 mm²: valori IEC 60364-5-52, per i secondari dei trasformatori MT/BT)
  */
 export const IZ_TABLE = {
-  2: { 1: 13.5, 1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 151, 70: 192, 95: 232, 120: 269 },
-  3: { 1: 12, 1.5: 15.5, 2.5: 21, 4: 28, 6: 36, 10: 50, 16: 68, 25: 89, 35: 110, 50: 134, 70: 171, 95: 207, 120: 239 },
+  2: { 1: 13.5, 1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 151, 70: 192, 95: 232, 120: 269, 150: 299, 185: 341, 240: 403 },
+  3: { 1: 12, 1.5: 15.5, 2.5: 21, 4: 28, 6: 36, 10: 50, 16: 68, 25: 89, 35: 110, 50: 134, 70: 171, 95: 207, 120: 239, 150: 262, 185: 296, 240: 346 },
 };
 
 export function iz(section, loaded = 2) {
@@ -46,9 +63,14 @@ export function iz(section, loaded = 2) {
   return t[section] ?? 0;
 }
 
+/** Portata di un cavo del progetto: sezione × conduttori in parallelo per fase (`n`, CEI 64-8 art. 523.6) */
+export const wireIz = (w, loaded = 2) => iz(w.section, loaded) * (w.n || 1);
+/** Etichetta della sezione (es. “2×240 mm²”) */
+export const sectionLabel = (w) => `${w.n > 1 ? w.n + '×' : ''}${fmt(w.section, 1)} mm²`;
+
 /** Diametro esterno indicativo del cavo unipolare [mm] (per il disegno 3D) */
 export function wireOuterDiameter(section) {
-  return { 1: 2.6, 1.5: 3.0, 2.5: 3.6, 4: 4.2, 6: 4.8, 10: 6.2, 16: 7.3, 25: 9, 35: 10.5, 50: 12.5, 70: 14.5, 95: 17, 120: 19 }[section] ?? 3;
+  return { 1: 2.6, 1.5: 3.0, 2.5: 3.6, 4: 4.2, 6: 4.8, 10: 6.2, 16: 7.3, 25: 9, 35: 10.5, 50: 12.5, 70: 14.5, 95: 17, 120: 19, 150: 21, 185: 23.5, 240: 27 }[section] ?? 3;
 }
 
 /** Colori dei conduttori (CEI EN 60446 / 60204-1) */
@@ -140,5 +162,15 @@ export function fmtW(p) {
 
 export function fmtV(v) {
   if (v < 1) return `${fmt(v, 2)} V`;
+  if (v >= 1000) return `${fmt(v / 1000, v >= 10000 ? 1 : 2)} kV`;
   return `${fmt(v, v < 100 ? 1 : 0)} V`;
 }
+
+/** Tensione nominale in forma breve: “400 V”, “6,6 kV”, “20 kV” */
+export function fmtKV(v) {
+  if (v >= 1000) return `${fmt(v / 1000, v % 1000 ? 1 : 0)} kV`;
+  return `${fmt(v, 0)} V`;
+}
+
+/** Nome breve di un sistema di rete: “440 V 60 Hz”, “20 kV 50 Hz” */
+export const sysShort = (sys) => `${fmtKV(sys.Vll)} ${sys.f} Hz`;

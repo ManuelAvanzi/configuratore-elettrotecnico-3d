@@ -145,8 +145,10 @@ export class App extends Emitter {
   onProjectChange(d = {}) {
     this.view.sync();
     this.sim.sync(this.project.data, (w) => this.project.electricalLength(w));
-    // sala quadri di bordo quando l'energia viene dai gruppi elettrogeni, aula-laboratorio con l'arrivo linea
-    this.world.setTheme(this.project.system().kind === 'genset' ? 'nave' : 'aula');
+    // sala quadri di bordo quando l'energia viene dai gruppi elettrogeni, cabina MT/BT con la consegna in media
+    // tensione, aula-laboratorio con l'arrivo linea
+    const kind = this.project.system().kind;
+    this.world.setTheme(kind === 'genset' ? 'nave' : kind === 'mtin' ? 'cabina' : 'aula');
     this.picker.invalidate();
     if (this.selection?.comp && !this.project.comp(this.selection.comp)) this.selection = null;
     if (this.selection?.wire && !this.project.wire(this.selection.wire)) this.selection = null;
@@ -323,7 +325,8 @@ export class App extends Emitter {
 
   // ── Simulazione ───────────────────────────────────────────────────────────────────
   togglePower() {
-    const sup = this.sim.sourceIds.map((id) => this.sim.getInst(id)).find((i) => i?.type === 'supply');
+    // arrivo linea (contatore) o consegna MT: un solo interruttore da manovrare
+    const sup = this.sim.sourceIds.map((id) => this.sim.getInst(id)).find((i) => i?.type === 'supply') || this.sim.sourceIds.map((id) => this.sim.getInst(id)).find((i) => i?.type === 'mtin');
     if (sup) {
       const r = this.sim.interact(sup.id, 'power');
       if (r?.sound) this.sfx(r.sound);

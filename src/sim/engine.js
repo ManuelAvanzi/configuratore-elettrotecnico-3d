@@ -72,7 +72,7 @@ export class Simulator {
     const main = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply')) || this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'genset')) || this.inst.get(this.sourceIds[0]);
     const sys = main?.def.system ? main.def.system(main.params) : { ...DEFAULT_SYS };
     this.env.sys = { ...DEFAULT_SYS, ...sys, fBus: sys.f };
-    this.wires = project.wires.map((w) => ({ id: w.id, a: w.a, b: w.b, section: w.section, fault: w.fault, len: this.lengthOf(w) }));
+    this.wires = project.wires.map((w) => ({ id: w.id, a: w.a, b: w.b, section: w.section, n: w.n || 1, fault: w.fault, len: this.lengthOf(w) }));
     this.dirty = true;
   }
 
@@ -130,7 +130,7 @@ export class Simulator {
         byKey.set(key, { kind: 'OPEN', a, b });
         continue;
       }
-      const R = Math.max(1e-4, (RHO_CU * Math.max(0.05, w.len)) / (w.section || 1.5)) + (w.fault === 'loose' ? 2.5 : 0);
+      const R = Math.max(1e-4, (RHO_CU * Math.max(0.05, w.len)) / ((w.section || 1.5) * (w.n || 1))) + (w.fault === 'loose' ? 2.5 : 0);
       const el = { kind: 'Y', a, b, y: C(1 / R, 0), key, R };
       els.push(el);
       byKey.set(key, el);
@@ -224,11 +224,25 @@ export class Simulator {
    * Resistenza di isolamento verso massa “misurata”: tensione del conduttore più vicino a massa diviso la
    * corrente che rientra dalla terra (come fa un controllore di isolamento). Infinity a rete sana.
    */
+  /** Sorgenti e trasformatori con il neutro BT isolato (sistema IT): nodo del centro stella da cui si misura l'isolamento */
+  itStars() {
+    const out = [];
+    for (const inst of this.inst.values()) {
+      if (inst.type === 'mtx' && inst.params.earthBT === 'IT') out.push({ inst, node: inst.id + '.#n2', Rins: inst.params.Rins || 200 });
+    }
+    if (out.length) return out; // con i trasformatori MT/BT il sistema BT è deciso dal loro secondario
+    for (const id of this.sourceIds) {
+      const inst = this.inst.get(id);
+      if (inst?.params.earth === 'IT') out.push({ inst, node: inst.id + (inst.type === 'supply' ? '.#s' : '.#g'), Rins: inst.params.Rins || 200 });
+    }
+    return out;
+  }
+
   insulationResistance() {
     if (!this.net) return Infinity;
-    const src = this.sourceIds.map((id) => this.inst.get(id)).find((i) => i?.params.earth === 'IT');
+    const src = this.itStars()[0];
     if (!src) return Infinity;
-    const star = this.net.nodes.get(src.id + (src.type === 'supply' ? '.#s' : '.#g'));
+    const star = this.net.nodes.get(src.node);
     if (star === undefined) return Infinity;
     // rete passiva (generatori a tensione nulla) + iniezione di 1 A tra il centro stella e la massa
     const els = this.net.els.map((e) => (e.kind === 'N' ? { ...e, is: ZERO } : e));
@@ -242,10 +256,7 @@ export class Simulator {
   /** Resistenza di isolamento verso terra della rete sana (sorgenti a neutro isolato in parallelo), Infinity se il neutro è a terra */
   insulationBase() {
     let g = 0;
-    for (const id of this.sourceIds) {
-      const inst = this.inst.get(id);
-      if (inst?.params.earth === 'IT') g += 1 / ((inst.params.Rins || 200) * 1000);
-    }
+    for (const x of this.itStars()) g += 1 / (x.Rins * 1000);
     return g > 0 ? 1 / g : Infinity;
   }
 
@@ -255,7 +266,7 @@ export class Simulator {
       if (id === exceptId) continue;
       const inst = this.inst.get(id);
       const s = inst.state;
-      const live = inst.type === 'supply' ? s.on && !s.limiter : inst.type === 'shore' ? s.closed : s.running && s.closed;
+      const live = inst.type === 'supply' ? s.on && !s.limiter : inst.type === 'mtin' ? s.on : inst.type === 'shore' ? s.closed : s.running && s.closed;
       if (live) return true;
     }
     return false;
@@ -277,6 +288,11 @@ export class Simulator {
     if (sup) {
       const s = sup.state;
       return { kind: 'supply', on: s.on && !s.limiter, fault: s.limiter, P: s.P, kWh: s.kWh, I: s.I, V: this.mainVoltage(), label: s.limiter ? 'Contatore distaccato' : s.on ? 'Impianto alimentato' : 'Impianto non alimentato', action: s.limiter ? 'Riarma contatore' : s.on ? 'Scollega impianto' : 'Alimenta impianto' };
+    }
+    const mt = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'mtin'));
+    if (mt) {
+      const s = mt.state;
+      return { kind: 'mtin', on: s.on, fault: false, P: s.P, kWh: s.kWh, I: s.I, V: this.mainVoltage(), label: s.on ? 'Consegna MT in tensione' : 'Consegna MT fuori tensione', action: s.on ? 'Togli tensione alla consegna' : 'Dai tensione alla consegna' };
     }
     const gens = this.sourceIds.map((id) => this.inst.get(id)).filter((i) => i.type === 'genset');
     const shores = this.sourceIds.map((id) => this.inst.get(id)).filter((i) => i.type === 'shore' && i.state.closed);
@@ -300,7 +316,11 @@ export class Simulator {
     const sup = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply'));
     if (sup) return this.measureV({ c: sup.id, t: 'L1' }, { c: sup.id, t: 'N' });
     let best = 0;
-    for (const id of this.sourceIds) best = Math.max(best, this.measureV({ c: id, t: 'L1' }, { c: id, t: 'N' }));
+    for (const id of this.sourceIds) {
+      const inst = this.inst.get(id);
+      // le sorgenti MT non hanno il neutro: tensione di fase ricavata dalla concatenata
+      best = Math.max(best, inst.type === 'mtin' ? this.measureV({ c: id, t: 'L1' }, { c: id, t: 'L2' }) / Math.sqrt(3) : this.measureV({ c: id, t: 'L1' }, { c: id, t: 'N' }));
+    }
     return best;
   }
 

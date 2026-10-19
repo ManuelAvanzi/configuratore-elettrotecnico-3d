@@ -191,6 +191,7 @@ export class World {
   // ── Aula ──────────────────────────────────────────────────────────────────────────
   buildRoom() {
     if (this.theme === 'nave') return this.buildRoomNave();
+    if (this.theme === 'cabina') return this.buildRoomCabina();
     const g = new THREE.Group();
     g.name = 'room';
     const X0 = -3.6;
@@ -413,6 +414,210 @@ export class World {
     this.bounds = { x0: X0, x1: X1, z0: 0, z1: Z1, h: H };
   }
 
+  /** Cabina MT/BT: locale in calcestruzzo senza finestre, pavimento in resina, griglie di aerazione, plafoniere stagne */
+  buildRoomCabina() {
+    const g = new THREE.Group();
+    g.name = 'room';
+    const X0 = -3.6;
+    const X1 = 4.8;
+    const Z1 = 7.2;
+    const H = 3.0;
+    const W = X1 - X0;
+    const cx = (X0 + X1) / 2;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, Z1), new THREE.MeshStandardMaterial({ color: 0x8e9196, roughness: 0.85 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(cx, 0, Z1 / 2);
+    floor.receiveShadow = true;
+    floor.userData.teleport = true;
+    g.add(floor);
+    this.teleportSurfaces.push(floor);
+    this.floor = floor;
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, Z1), wallMaterial('#d9d7d0'));
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(cx, H, Z1 / 2);
+    g.add(ceil);
+    const wm = wallMaterial('#cfccc3');
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wm);
+    back.position.set(cx, H / 2, 0);
+    back.receiveShadow = true;
+    g.add(back);
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wm);
+    front.rotation.y = Math.PI;
+    front.position.set(cx, H / 2, Z1);
+    g.add(front);
+    const right = new THREE.Mesh(new THREE.PlaneGeometry(Z1, H), wm);
+    right.rotation.y = -Math.PI / 2;
+    right.position.set(X1, H / 2, Z1 / 2);
+    right.receiveShadow = true;
+    g.add(right);
+    const left = new THREE.Mesh(new THREE.PlaneGeometry(Z1, H), wm);
+    left.rotation.y = Math.PI / 2;
+    left.position.set(X0, H / 2, Z1 / 2);
+    left.receiveShadow = true;
+    g.add(left);
+    // zoccolo in calcestruzzo a vista e griglie di aerazione (basse per l'aria fresca, alte per quella calda)
+    const conc = wallMaterial('#b3b0a8');
+    box(W, 0.9, 0.02, conc, cx, 0.45, 0.011, g);
+    box(0.02, 0.9, Z1, conc, X0 + 0.011, 0.45, Z1 / 2, g);
+    box(0.02, 0.9, Z1, conc, X1 - 0.011, 0.45, Z1 / 2, g);
+    const grille = (x, y, z, w, h, rotY = 0) => {
+      const gr = new THREE.Group();
+      box(w, h, 0.02, MAT.industrialDark, 0, 0, 0, gr);
+      const n = Math.floor(h / 0.06);
+      for (let i = 0; i < n; i++) {
+        const b = box(w - 0.04, 0.03, 0.02, MAT.plasticMid, 0, -h / 2 + 0.04 + i * 0.06, 0.012, gr);
+        b.rotation.x = 0.6;
+      }
+      gr.position.set(x, y, z);
+      gr.rotation.y = rotY;
+      g.add(gr);
+    };
+    for (const z of [2.2, 4.4]) {
+      grille(X0 + 0.02, 0.5, z, 0.9, 0.5, Math.PI / 2);
+      grille(X0 + 0.02, 2.55, z, 0.9, 0.4, Math.PI / 2);
+    }
+    // plafoniere stagne
+    const led = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xf4f6ff, emissiveIntensity: 1.5, roughness: 0.4 });
+    for (const x of [-1.6, 0.6, 2.8]) {
+      for (const z of [1.6, 3.9, 6.0]) {
+        const p = box(1.2, 0.06, 0.12, led, x, H - 0.05, z, g);
+        p.renderOrder = 1;
+        box(1.24, 0.03, 0.16, MAT.plasticGrey, x, H - 0.02, z, g);
+      }
+    }
+    // tappeto isolante davanti al quadro MT e striscia a pavimento
+    const mat = box(4.2, 0.012, 1.0, MAT.rubber, 0.3, 0.006, 0.75, g);
+    mat.receiveShadow = true;
+    this.floorTape(g);
+    this.room = g;
+    this.root.add(g);
+    this.bounds = { x0: X0, x1: X1, z0: 0, z1: Z1, h: H };
+  }
+
+  /** Arredi della cabina: porta REI con cartelli, armadietto DPI con guanti e fioretto, collettore di terra, estintore CO2, cartello delle cinque regole */
+  buildFurnitureCabina() {
+    const g = new THREE.Group();
+    const Z1 = this.bounds.z1;
+    // collettore di terra della cabina lungo la parete di fondo (piatto di rame su isolatori)
+    box(5.5, 0.03, 0.004, MAT.copper, 0.6, 0.32, 0.04, g);
+    for (let x = -1.9; x < 3.4; x += 0.9) {
+      const iso = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.03, 10), MAT.plasticRed);
+      iso.rotation.x = Math.PI / 2;
+      iso.position.set(x, 0.32, 0.02);
+      g.add(iso);
+    }
+    // armadietto DPI con guanti isolanti, fioretto e rivelatore di tensione
+    const dpi = new THREE.Group();
+    box(0.7, 1.6, 0.35, MAT.steelCabinet, 0, 0.8, 0, dpi);
+    box(0.64, 1.5, 0.01, MAT.plasticDark, 0, 0.8, 0.176, dpi);
+    for (const sy of [1.25, 0.95]) box(0.5, 0.02, 0.2, MAT.plasticGrey, 0, sy, 0.08, dpi); // ripiani (vetrina aperta)
+    for (const sx of [-0.14, 0.14]) {
+      const glove = box(0.09, 0.22, 0.03, MAT.plasticOrange, sx, 1.4, 0.1, dpi);
+      glove.rotation.z = sx < 0 ? 0.15 : -0.15;
+    }
+    box(0.04, 1.4, 0.04, MAT.plasticOrange, -0.26, 0.75, 0.1, dpi); // fioretto isolante
+    box(0.06, 0.1, 0.05, MAT.plasticBlack, -0.26, 1.5, 0.1, dpi);
+    box(0.08, 0.18, 0.05, MAT.plasticYellow, 0.18, 1.0, 0.1, dpi); // rivelatore di tensione
+    box(0.3, 0.2, 0.01, MAT.plasticRed, 0.05, 0.5, 0.18, dpi); // cartello “LAVORI IN CORSO”
+    const dl = makeCanvas(256, 96);
+    const d2 = dl.getContext('2d');
+    d2.fillStyle = '#e9e7df';
+    d2.fillRect(0, 0, 256, 96);
+    d2.fillStyle = '#333';
+    d2.font = '800 24px Manrope, Arial';
+    d2.fillText('DPI · CEI 11-27', 14, 40);
+    d2.font = '500 18px Inter, Arial';
+    d2.fillText('guanti · fioretto · rivelatore', 14, 72);
+    const dt = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.15), new THREE.MeshStandardMaterial({ map: canvasTexture(dl), roughness: 0.6 }));
+    dt.position.set(0, 1.68, 0.18);
+    dpi.add(dt);
+    dpi.position.set(-3.2, 0, 1.6);
+    dpi.rotation.y = Math.PI / 2;
+    g.add(dpi);
+    // estintore CO2
+    const ext = new THREE.Group();
+    const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.55, 20), MAT.plasticRed);
+    bottle.position.y = 0.28;
+    ext.add(bottle);
+    const horn = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 16), MAT.plasticBlack);
+    horn.position.set(0.1, 0.45, 0);
+    horn.rotation.z = -0.9;
+    ext.add(horn);
+    ext.position.set(4.66, 0.9, 3.0);
+    g.add(ext);
+    box(0.02, 0.9, 0.35, MAT.aluminium, 4.79, 0.45, 3.0, g);
+    // porta tagliafuoco con cartelli
+    const door = new THREE.Group();
+    box(0.06, 2.15, 1.0, MAT.industrialGrey, 0, 1.075, 0, door);
+    box(0.08, 2.2, 0.06, MAT.industrialDark, 0, 1.1, 0.53, door);
+    box(0.08, 2.2, 0.06, MAT.industrialDark, 0, 1.1, -0.53, door);
+    box(0.08, 0.06, 1.12, MAT.industrialDark, 0, 2.2, 0, door);
+    box(0.08, 0.1, 0.4, MAT.aluminium, -0.04, 1.05, -0.2, door); // maniglione antipanico
+    const sc = makeCanvas(512, 512);
+    const s2 = sc.getContext('2d');
+    s2.fillStyle = '#ffffff';
+    s2.fillRect(0, 0, 512, 512);
+    s2.fillStyle = '#f2c200';
+    s2.beginPath();
+    s2.moveTo(256, 40);
+    s2.lineTo(470, 400);
+    s2.lineTo(42, 400);
+    s2.closePath();
+    s2.fill();
+    s2.strokeStyle = '#111';
+    s2.lineWidth = 16;
+    s2.stroke();
+    s2.fillStyle = '#111';
+    s2.beginPath();
+    s2.moveTo(276, 130);
+    s2.lineTo(206, 270);
+    s2.lineTo(262, 270);
+    s2.lineTo(228, 370);
+    s2.lineTo(316, 230);
+    s2.lineTo(260, 230);
+    s2.closePath();
+    s2.fill();
+    s2.font = '800 44px Manrope, Arial';
+    s2.textAlign = 'center';
+    s2.fillText('ALTA TENSIONE', 256, 460);
+    s2.font = '600 30px Inter, Arial';
+    s2.fillText('vietato l’ingresso ai non autorizzati', 256, 500);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), new THREE.MeshStandardMaterial({ map: canvasTexture(sc), roughness: 0.6 }));
+    sign.rotation.y = -Math.PI / 2;
+    sign.position.set(-0.035, 1.55, 0);
+    door.add(sign);
+    door.position.set(4.78, 0, 5.2);
+    g.add(door);
+    // cartello delle cinque regole sopra il banco
+    const rc = makeCanvas(1024, 384);
+    const r2 = rc.getContext('2d');
+    r2.fillStyle = '#ffffff';
+    r2.fillRect(0, 0, 1024, 384);
+    r2.fillStyle = '#1d4e89';
+    r2.fillRect(0, 0, 1024, 70);
+    r2.fillStyle = '#ffffff';
+    r2.font = '800 40px Manrope, Arial';
+    r2.fillText('CABINA MT/BT 20 kV · LE CINQUE REGOLE (CEI 11-27)', 24, 50);
+    r2.fillStyle = '#111';
+    r2.font = '600 34px Inter, Arial';
+    ['1. Sezionare', '2. Assicurare contro la richiusura', '3. Verificare l’assenza di tensione', '4. Mettere a terra e in cortocircuito', '5. Proteggere dalle parti attive adiacenti'].forEach((t, i) => r2.fillText(t, 24, 125 + i * 52));
+    const rules = new THREE.Mesh(new THREE.PlaneGeometry(1.0, 0.375), new THREE.MeshStandardMaterial({ map: canvasTexture(rc), roughness: 0.6 }));
+    rules.position.set(-2.1, 2.25, 0.005);
+    g.add(rules);
+    // sedia e scrivania del manutentore con il registro delle manovre
+    const desk = new THREE.Group();
+    box(1.2, 0.04, 0.6, laminateMaterial(), 0, 0.74, 0, desk);
+    for (const sx of [-1, 1]) box(0.04, 0.72, 0.56, MAT.plasticMid, sx * 0.57, 0.36, 0, desk);
+    box(0.3, 0.02, 0.4, MAT.plasticIvory, 0.2, 0.77, 0, desk);
+    desk.position.set(3.35, 0, 1.55);
+    desk.rotation.y = -0.18;
+    g.add(desk);
+    shadowAll(g, true, true);
+    this.furniture = g;
+    this.root.add(g);
+    void Z1;
+  }
+
   // ── Quadro elettrico ──────────────────────────────────────────────────────────────
   buildCabinet() {
     const cab = new THREE.Group();
@@ -572,6 +777,7 @@ export class World {
   // ── Contatore del distributore ────────────────────────────────────────────────────
   buildMeterBox() {
     const nave = this.theme === 'nave';
+    const cabina = this.theme === 'cabina';
     const g = new THREE.Group();
     g.name = 'meter';
     g.position.set(-1.14, 1.5, 0);
@@ -588,7 +794,7 @@ export class World {
     const btnBase = rbox(0.06, 0.05, 0.02, 0.004, MAT.plasticDark, 0, -0.07, 0.1, g);
     void btnBase;
     const lever = rbox(0.036, 0.022, 0.018, 0.003, MAT.plasticRed, 0, -0.07, 0.115, g);
-    lever.userData = { compId: 'XA', action: 'power', hint: nave ? 'Comando della centrale: avvia / ferma i gruppi' : 'Interruttore del contatore: alimenta / scollega l’impianto' };
+    lever.userData = { compId: 'XA', action: 'power', hint: cabina ? 'Interruttore di consegna del distributore: dà / toglie tensione alla cabina' : nave ? 'Comando della centrale: avvia / ferma i gruppi' : 'Interruttore del contatore: alimenta / scollega l’impianto' };
     this.meterLever = lever;
     this.interactive.push(lever);
     // targa
@@ -598,9 +804,9 @@ export class World {
     t2.fillRect(0, 0, 256, 64);
     t2.fillStyle = '#333';
     t2.font = '700 22px Manrope, Arial';
-    t2.fillText(nave ? 'CENTRALE' : 'CONTATORE', 12, 28);
+    t2.fillText(cabina ? 'CONSEGNA MT' : nave ? 'CENTRALE' : 'CONTATORE', 12, 28);
     t2.font = '500 17px Inter, Arial';
-    t2.fillText(nave ? 'Comando generatori' : 'Punto di consegna', 12, 52);
+    t2.fillText(cabina ? 'Distributore · 20 kV' : nave ? 'Comando generatori' : 'Punto di consegna', 12, 52);
     const tp = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.03), new THREE.MeshStandardMaterial({ map: canvasTexture(tc), roughness: 0.6 }));
     tp.position.set(0, 0.125, 0.0905);
     g.add(tp);
@@ -845,6 +1051,7 @@ export class World {
   // ── Arredi ────────────────────────────────────────────────────────────────────────
   buildFurniture() {
     if (this.theme === 'nave') return this.buildFurnitureNave();
+    if (this.theme === 'cabina') return this.buildFurnitureCabina();
     const g = new THREE.Group();
     const lam = laminateMaterial();
     const leg = MAT.plasticMid;

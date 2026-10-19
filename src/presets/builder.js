@@ -4,7 +4,7 @@ import { Project, blankProject } from '../core/project.js';
 /**
  * build({ sys, earth, title, supply:{...} }, (b) => { b.add(...); b.wire(...) })
  *   b.add(tag, type, mount, params)   mount: 'R1:4' (guida 1, modulo 5) · 'A2' (pannello, riga A colonna 2)
- *   b.wire('Q1:2', 'SA1:L', sezione, colore)
+ *   b.wire('Q1:2', 'SA1:L', sezione, colore, conduttoriInParallelo)
  */
 export function build(opts, fn) {
   const p = new Project(blankProject({ sys: opts.sys || '1F', earth: opts.earth || 'TT', title: opts.title || 'Impianto', source: opts.source || 'supply' }));
@@ -25,7 +25,7 @@ export function build(opts, fn) {
       byTag[tag] = c.id;
       return c;
     },
-    wire(a, b, section = 1.5, color) {
+    wire(a, b, section = 1.5, color, n = 1) {
       const [ta, pa] = a.split(':');
       const [tb, pb] = b.split(':');
       const ra = { c: byTag[ta], t: pa };
@@ -35,7 +35,7 @@ export function build(opts, fn) {
         const roleB = p.terminal(rb)?.role;
         color = role === 'PE' || roleB === 'PE' ? 'yg' : role === 'N' || roleB === 'N' ? 'blue' : 'brown';
       }
-      const r = p.addWire(ra, rb, { section, color });
+      const r = p.addWire(ra, rb, { section, color, n });
       if (r.error) throw new Error(`Preset: ${r.error} (${a} → ${b})`);
       return r.wire;
     },

@@ -390,8 +390,10 @@ export const m3 = {
     const m = [cabs(uv), cabs(vw), cabs(wu)];
     s.vline = m;
     const vmax = Math.max(...m);
-    const all = Math.min(...m) > 0.75 * Vn;
+    const vmin = Math.min(...m);
+    const all = vmin > 0.75 * Vn;
     const some = vmax > 0.4 * Vn;
+    const symmetric = vmin > 0.4 * Vn && (vmax - vmin) / vmax < 0.15; // tensione bassa ma simmetrica (rete debole, inserzione di un trasformatore)
     if (all) s.dir = cmul(uv, cconj(vw)).im >= 0 ? 1 : -1;
     if (vmax > 1.3 * Vn && !s.overWarned) {
       s.overWarned = true;
@@ -404,7 +406,7 @@ export const m3 = {
     if (mode !== s.mode) {
       s.mode = mode;
       s.t = 0;
-      if (mode === 'stall') ctx.emit({ level: 'warn', text: `${inst.tag}: manca una fase — il motore non si avvia (marcia in monofase) e assorbe una corrente elevata.`, sound: 'hum' });
+      if (mode === 'stall') ctx.emit({ level: 'warn', text: symmetric ? `${inst.tag}: tensione insufficiente (${fmtV(vmax)} tra le fasi) — il motore non riesce ad avviarsi e assorbe una corrente elevata.` : `${inst.tag}: manca una fase — il motore non si avvia (marcia in monofase) e assorbe una corrente elevata.`, sound: 'hum' });
       return true;
     }
     return false;

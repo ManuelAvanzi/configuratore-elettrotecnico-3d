@@ -1,7 +1,7 @@
 {
   "name": "configuratore-elettrotecnico-3d",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Dispositivi elettrotecnici: configuratore 3D — laboratorio immersivo web + WebXR (CarraroLab / ITS)",
   "type": "module",
   "scripts": {
@@ -10,11 +10,12 @@
     "build": "vite build",
     "preview": "vite preview",
     "pubblica": "node scripts/pubblica.mjs",
-    "test": "node tests/sim.test.mjs && node tests/lessons.test.mjs && node tests/exercises.test.mjs && node tests/nautico.test.mjs",
+    "test": "node tests/sim.test.mjs && node tests/lessons.test.mjs && node tests/exercises.test.mjs && node tests/nautico.test.mjs && node tests/mt.test.mjs",
     "test:sim": "node tests/sim.test.mjs",
     "test:lezioni": "node tests/lessons.test.mjs",
     "test:esercitazioni": "node tests/exercises.test.mjs",
-    "test:nautico": "node tests/nautico.test.mjs"
+    "test:nautico": "node tests/nautico.test.mjs",
+    "test:mt": "node tests/mt.test.mjs"
   },
   "dependencies": {
     "@fontsource/inter": "^5.3.0",

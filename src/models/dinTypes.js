@@ -139,6 +139,31 @@ const SPECS = {
 
   isol2p: isolSpec,
   isol4p: isolSpec,
+  mccb(def, p, comp) {
+    return {
+      profile: 'industrial',
+      bodyMat: MAT.industrialDark,
+      bg: '#3d4248',
+      ink: '#e6e8ea',
+      lever: { color: 'dark', width: 0.03, y: 0.004 },
+      led: { x: -0.036, y: -0.006, color: '#35d46a' },
+      paint(pt, d) {
+        pt.rect(0, 18.5, Math.min(d.w - 2.4, 22), 5.6, '#ffffff', 0.8);
+        pt.text(comp.tag, 0, 18.6, 3.9, { weight: 800, color: '#111' });
+        pt.text(`${p.In} A`, -28, 12.5, 4.2, { weight: 800, color: '#ffffff' });
+        pt.text(`Icu ${p.Icu} kA`, -28, 7, 2.4, { weight: 700, color: '#d6d8dc' });
+        pt.text('L  S  I', 28, 13, 3.4, { weight: 800, color: '#ff8a3d' });
+        pt.text(`Ir ${fmt(p.Ir * p.In, 0)} A`, 28, 8.2, 2.2, { weight: 700, color: '#e6e8ea' });
+        pt.text(`Isd ${p.Isd}×Ir ${fmt(p.tsd, 2)} s`, 28, 4.6, 2, { weight: 600, color: '#d6d8dc' });
+        pt.text(`Ii ${p.Ii ? p.Ii + '×In' : 'OFF'}`, 28, 1.2, 2, { weight: 600, color: '#d6d8dc' });
+        leverSlot(pt, 36, 4, 15);
+        pt.text('I', -16, 12, 2.4, { weight: 800, color: '#ff5a4a' });
+        pt.text('O', -16, -4.5, 2.4, { weight: 800, color: '#7fe3a0' });
+        pt.text('SCATOLATO · sganciatore elettronico', 0, -12, 2.1, { weight: 700, color: '#e6e8ea' });
+        pt.text('EN 60947-2 · 4P', 0, -16.5, 2, { weight: 600, color: '#aeb3b9' });
+      },
+    };
+  },
   mcb1pn: mcbSpec,
   mcb3p: mcbSpec,
   mcb4p: mcbSpec,
@@ -382,6 +407,13 @@ export function buildDinModel(def, params, comp) {
       case 'isol2p': case 'isol4p': case 'mcb1pn': case 'mcb3p': case 'mcb4p': case 'rcd2p': case 'rcd4p': case 'rcbo1pn':
         animateLever(parts, s.on, dt, s.tripped);
         if (parts.test) parts.test.position.z += ((s.test ? -0.0015 : 0) + 0.0672 + 0.0012 - parts.test.position.z) * Math.min(1, dt * 30);
+        break;
+      case 'mccb':
+        animateLever(parts, s.on, dt, s.tripped);
+        if (parts.led) {
+          parts.led.material.emissive.setHex(s.tripped ? 0xff3322 : 0x35d46a);
+          setEmissive(parts.led, s.tripped ? (Math.sin(time * 8) > 0 ? 2.5 : 0.3) : s.on ? 2 : 0);
+        }
         break;
       case 'sel':
         animateLever(parts, s.on, dt);

@@ -4,14 +4,16 @@ import { isol2p, isol4p, mcb1pn, mcb3p, mcb4p, rcd2p, rcd4p, rcbo1pn, fr3 } from
 import { km3, km2m, kpp, kt, kcr, hl, sbm, sel, pm1 } from './control.js';
 import { lamp, xs, sa, sd, si, sp, ss, pir, hb, m3 } from './field.js';
 import { genset, imd, kls, shore, ats, ups } from './nautico.js';
+import { mtin, mtcb, mtx, mccb } from './mt.js';
 
 export const DEFS = {};
 for (const d of [
   supply, pebar, term,
-  isol2p, isol4p, mcb1pn, mcb3p, mcb4p, rcd2p, rcd4p, rcbo1pn, fr3,
+  isol2p, isol4p, mcb1pn, mcb3p, mcb4p, rcd2p, rcd4p, rcbo1pn, fr3, mccb,
   km3, km2m, kpp, kt, kcr, hl, sbm, sel, pm1,
   lamp, xs, sa, sd, si, sp, ss, pir, hb, m3,
   genset, imd, kls, shore, ats, ups,
+  mtin, mtcb, mtx,
 ]) {
   DEFS[d.type] = d;
 }
@@ -25,6 +27,7 @@ export const FAMILIES = [
   { id: 'utenze', label: 'Utenze', mount: 'field' },
   { id: 'campo', label: 'Comandi di campo', mount: 'field' },
   { id: 'alimentazione', label: 'Generazione (impianti di bordo)', mount: 'field' },
+  { id: 'mt', label: 'Media tensione (cabina MT/BT e quadro MT)', mount: 'field' },
 ];
 
 export const getDef = (type) => DEFS[type];

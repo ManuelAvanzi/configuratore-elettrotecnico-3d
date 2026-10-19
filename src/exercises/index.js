@@ -4,7 +4,7 @@
 // l'impianto in isolamento (il circuito reale dello studente non viene modificato).
 import { blankProject } from '../core/project.js';
 import { build } from '../presets/builder.js';
-import { appartamento, motore, domotica, nave, naveVuota } from '../presets/index.js';
+import { appartamento, motore, domotica, nave, naveVuota, cabina, naveMT } from '../presets/index.js';
 
 /** Copia di un progetto senza i cavi che soddisfano `pred(wire, tagOf)` (impianti di partenza “da completare”) */
 function withoutWires(data, pred) {
@@ -937,6 +937,139 @@ export const EXERCISES = [
       { label: 'Almeno tre motivazioni scritte', run: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
     ],
     questions: ['Perché il differenziale non interviene al primo guasto in un sistema IT, e perché il secondo guasto è un cortocircuito?', 'Perché la corrente di cortocircuito di un generatore è solo 5–8 volte la nominale, mentre dalla rete pubblica può essere di decine di kA?', 'Che cosa cambia nella scelta di un interruttore tra Icu e Ics? Quando i registri chiedono la Ics?'],
+  },
+
+  // ── Esercitazioni in media tensione (modulo B) ─────────────────────────────────────
+  {
+    id: 'mt-cabina',
+    track: 'quadro',
+    tema: 'mt',
+    view: 'panoramica',
+    title: 'Cabina MT/BT: messa in servizio e protezioni selettive',
+    level: 'Avanzato',
+    phase: 2,
+    icon: 'zap',
+    color: '#b3262c',
+    duration: '1 ora e mezza',
+    summary: 'Completare i collegamenti della cabina (cella del trasformatore, secondario con conduttori in parallelo), tarare il relè 50/51 sopra l’inserzione e selettivo con il generale BT, poi manovrare la cella in sicurezza.',
+    goals: ['Capire la catena consegna → DG → cella trasformatore → trasformatore → generale BT', 'Regolare la soglia rapida 50 sopra la corrente di inserzione e sopra il cortocircuito BT riportato al primario', 'Ottenere la selettività cronometrica tra la 51 MT e il generale BT scatolato', 'Eseguire la sequenza di messa fuori servizio con gli interblocchi (CEI 11-27)'],
+    start: () => {
+      const d = withoutWires(cabina(), (w, tagOf) => (tagOf(w.a) === 'T1' || tagOf(w.b) === 'T1'));
+      const qm2 = d.components.find((c) => c.tag === 'QM2');
+      Object.assign(qm2.params, { I2: 60, t2: 0.05, t1: 0.1 }); // regolazioni sbagliate: scatta all'inserzione e non è selettiva
+      d.meta.title = 'Cabina MT/BT da completare';
+      return d;
+    },
+    solution: cabina,
+    steps: [
+      { text: 'Collega la cella QM2 al primario del trasformatore T1 con cavi da 50 mm²: 2 → 1U, 4 → 1V, 6 → 1W; poi il PE di T1 al collettore di terra.', hint: 'I cavi MT sono isolati a 20 kV: la sezione serve alla corrente di cortocircuito, non ai pochi ampere di carico (In1 = 11,5 A).', done: (c) => c.wired('mtcb', '2', 'mtx', '1') && c.wired('mtcb', '4', 'mtx', '3') && c.wired('mtcb', '6', 'mtx', '5') && c.wired('mtx', 'PE', 'pebar') },
+      { text: 'Collega il secondario di T1 al generale QG (2U → 1, 2V → 3, 2W → 5, 2N → N) con due conduttori da 240 mm² per fase: la corrente nominale del secondario è 577 A.', hint: 'Scegli la sezione 240 mm² e poi “Conduttori in parallelo per fase” = 2 nelle proprietà del cavo: la portata diventa 2 × 346 = 692 A.', done: (c) => {
+        const t = c.first('mtx');
+        const q = c.first('mccb');
+        if (!t || !q) return false;
+        const pair = (a, b) => c.p.wires.find((w) => (w.a.c === t.id && w.a.t === a && w.b.c === q.id && w.b.t === b) || (w.b.c === t.id && w.b.t === a && w.a.c === q.id && w.a.t === b));
+        return [['2', '1'], ['4', '3'], ['6', '5'], ['N', 'N1']].every(([a, b]) => {
+          const w = pair(a, b);
+          return w && w.section * (w.n || 1) >= 480;
+        });
+      } },
+      { text: 'Regola la cella QM2: la soglia rapida 50 (I>>) deve stare sopra la corrente di inserzione del trasformatore (≈ 10 × In1 = 115 A) e sopra il cortocircuito BT riportato al primario (≈ 190 A). Portala ad almeno 200 A.', hint: 'Con I>> = 60 A il relè scatterebbe a ogni inserzione. Guarda la verifica “protezione MT del trasformatore”.', done: (c) => c.has('mtcb', (p) => p.ruolo === 'tr' && p.I2 >= 200) && !c.checkErr('mt-prot-') },
+      { text: 'Selettività cronometrica: il ritardo t> della 51 di QM2 deve superare di almeno 0,15 s il ritardo tsd del generale BT (0,1 s). Imposta t> = 0,3 s e controlla la verifica “Selettività MT/BT”.', done: (c) => c.checkOk('mt-sel-') },
+      { live: true, text: 'Dai tensione alla consegna (pulsante in basso o leva dell’armadio di consegna): le celle sono chiuse, il trasformatore si inserisce. Leggi nelle Proprietà di T1 la tensione al secondario (≈ 400 V) e l’evento di inserzione nel registro.', done: (c) => c.powered() && !!c.first('mtx') && !!c.state(c.first('mtx').id).live },
+      { live: true, text: 'Messa fuori servizio in sicurezza di QM2 per lavori sul trasformatore: apri l’interruttore, apri il sezionatore di linea, verifica che gli indicatori di presenza tensione lato cavo siano spenti, poi chiudi il sezionatore di terra.', hint: 'Prova a sbagliare l’ordine: gli interblocchi lo impediscono e spiegano perché.', done: (c) => c.seen('mt-terra', c.comps('mtcb').some((q) => c.par(q).ruolo === 'tr' && c.state(q.id).terra && !c.state(q.id).sez && !c.state(q.id).int)) },
+      { live: true, text: 'Rimetti in servizio la cella: apri il sezionatore di terra, chiudi il sezionatore di linea, chiudi l’interruttore. Il trasformatore si inserisce di nuovo senza far scattare il relè.', done: (c) => c.seen('mt-terra') && c.comps('mtcb').some((q) => c.par(q).ruolo === 'tr' && c.state(q.id).int && !c.state(q.id).terra) },
+    ],
+    tests: [
+      {
+        label: 'Inserzione del trasformatore senza intervento della cella MT',
+        run: (c) => {
+          const t = c.first('mtx');
+          const qs = c.comps('mtcb');
+          if (!t || !qs.length) return false;
+          const steps = qs.map((q) => ({ set: [q.id, { sez: true, int: true, terra: false, tripped: false, cause: null }] }));
+          const [r] = c.scenario([...steps, { power: true }, { wait: 0.5 }, { check: (s) => s.getInst(t.id).state.live && qs.every((q) => !s.getInst(q.id).state.tripped) && s.getInst(t.id).state.V2 > 380 }]);
+          return r;
+        },
+      },
+      {
+        label: 'Cortocircuito su una presa: interviene solo la partenza, non il generale né la MT',
+        run: (c) => {
+          const xs = c.first('xs');
+          const qg = c.first('mccb');
+          const qs = c.comps('mtcb');
+          if (!xs || !qg) return false;
+          const [r] = c.scenario([...qs.map((q) => ({ set: [q.id, { sez: true, int: true, terra: false, tripped: false }] })), { power: true }, { wait: 0.5 }, { params: [xs.id, { carico: 'short' }] }, { wait: 0.4 }, { check: (s) => !s.getInst(qg.id).state.tripped && qs.every((q) => !s.getInst(q.id).state.tripped) && [...s.inst.values()].some((i) => i.state.tripped) }]);
+          return r;
+        },
+      },
+      {
+        label: 'Interblocco: il sezionatore di terra non si chiude con la cella in servizio',
+        run: (c) => {
+          const q = c.comps('mtcb').find((x) => c.par(x).ruolo === 'tr');
+          if (!q) return false;
+          const [r] = c.scenario([{ set: [q.id, { sez: true, int: true, terra: false }] }, { act: [q.id, 'terra'] }, { check: (s) => !s.getInst(q.id).state.terra }]);
+          return r;
+        },
+      },
+      { label: 'Protezione MT del trasformatore regolata (51, 50 sopra l’inserzione, tenuta 2 s)', run: (c) => c.checkOk('mt-prot-') && !c.checkErr('mt-prot-') },
+      { label: 'Selettività MT/BT amperometrica e cronometrica', run: (c) => c.checkOk('mt-sel-') },
+      { label: 'Generale BT dimensionato sul trasformatore', run: (c) => c.checkOk('mt-qg-') },
+      { label: 'Coordinamento cavi-interruttori e PE senza errori', run: (c) => c.noErrors('coord-') && c.noErrors('pe-') && c.noErrors('pdi-') },
+    ],
+    questions: ['Perché la soglia rapida I>> della cella del trasformatore deve stare sopra la corrente di inserzione e sopra il cortocircuito BT riportato al primario?', 'Che cosa succederebbe a un cortocircuito sulla sbarra BT se la 51 della cella MT avesse lo stesso ritardo del generale BT?', 'Perché il secondario di un trasformatore da 400 kVA richiede due conduttori da 240 mm² per fase, mentre il primario ne basta uno da 50?'],
+  },
+
+  {
+    id: 'mt-bordo',
+    track: 'parametri',
+    tema: 'mt',
+    view: 'panoramica',
+    title: 'Quadro MT di bordo: generatori a 6,6 kV e sbarra in isola',
+    level: 'Avanzato',
+    phase: 3,
+    icon: 'waves',
+    color: '#7a2a22',
+    duration: '1 ora',
+    summary: 'Con il docente: generatori in media tensione, correnti di cortocircuito “piccole” della rete in isola, trasformatore di servizio con neutro BT isolato, protezioni delle celle di generatore e selettività MT/BT.',
+    goals: ['Legare la corrente di cortocircuito sulla sbarra MT al numero di gruppi in servizio', 'Capire perché le soglie 50 delle celle di generatore sono basse', 'Riconoscere il sistema IT a valle del trasformatore di servizio', 'Manovrare una cella MT di bordo in sicurezza'],
+    start: naveMT,
+    solution: null,
+    teacher: true,
+    steps: [
+      { live: true, text: 'Avvia G1 e chiudi il suo interruttore di macchina (Proprietà di G1): la sbarra MT è a 6,6 kV. Leggi In (175 A) e la corrente di cortocircuito del gruppo (≈ 1,2 kA, meno di 7 volte In).', done: (c) => c.seen('mt-g1', c.gens().some((g) => c.genOn(g))) },
+      { live: true, text: 'Con un solo gruppo avvia l’elica di manovra (chiudi Q2): osserva la caduta di tensione sulla sbarra MT nelle Proprietà di G1 e al secondario di T1.', done: (c) => c.seen('mt-m2', c.comps('m3').some((m) => c.state(m.id).mode === 'start')) },
+      { live: true, text: 'Avvia G2, attendi il sincronismo e chiudilo in parallelo: il carico si ripartisce e la corrente di cortocircuito sulla sbarra MT raddoppia. Rileggi i valori.', done: (c) => c.seen('mt-par', c.gens().filter((g) => c.genOn(g)).length === 2) },
+      { text: 'Apri la scheda Verifiche, gruppo “Media tensione”: celle di generatore (51 a 1,1–1,6 In, 50 sotto il contributo del gruppo), protezione di T1, selettività MT/BT con il generale QG. Spiega perché a bordo le soglie 50 sono basse.', done: (c) => c.checkOk('mt-gen-') && c.checkOk('mt-sel-') },
+      { live: true, text: 'Messa in sicurezza della cella QM3 per lavori sul trasformatore di servizio: apri l’interruttore, apri il sezionatore di linea, verifica l’assenza di tensione, chiudi il sezionatore di terra. Che cosa succede al quadro BT?', done: (c) => c.seen('mt-terra3', c.comps('mtcb').some((q) => c.par(q).ruolo === 'tr' && c.state(q.id).terra)) },
+      { text: 'Annota la motivazione (pannello Proprietà) su G1, su una cella MT e su T1: valore scelto e perché.', done: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
+    ],
+    tests: [
+      {
+        label: 'Due gruppi in parallelo sulla sbarra MT alimentano il quadro BT a 440 V',
+        run: (c) => {
+          const t = c.first('mtx');
+          const e = c.first('lamp');
+          const qs = c.comps('mtcb');
+          if (!t || !e) return false;
+          const [r] = c.scenario([...qs.map((q) => ({ set: [q.id, { sez: true, int: true, terra: false, tripped: false }] })), { power: true }, { wait: 3 }, { check: (s) => c.gens().filter((g) => s.getInst(g.id).state.closed).length >= 2 && s.getInst(t.id).state.V2 > 400 && lampBright(s, e.id) > 0.5 }]);
+          return r;
+        },
+      },
+      {
+        label: 'Interblocco: il sezionatore di terra non si chiude con la cella in servizio',
+        run: (c) => {
+          const q = c.comps('mtcb').find((x) => c.par(x).ruolo === 'tr');
+          if (!q) return false;
+          const [r] = c.scenario([{ set: [q.id, { sez: true, int: true, terra: false }] }, { act: [q.id, 'terra'] }, { check: (s) => !s.getInst(q.id).state.terra }]);
+          return r;
+        },
+      },
+      { label: 'Protezioni delle celle di generatore regolate per la rete in isola', run: (c) => c.checkOk('mt-gen-') && !c.checkErr('mt-gen-') },
+      { label: 'Selettività MT/BT tra la cella del trasformatore e il generale BT', run: (c) => c.checkOk('mt-sel-') },
+      { label: 'Controllo dell’isolamento sulla rete BT (sistema IT)', run: (c) => c.checkOk('it-imd') },
+      { label: 'Almeno tre motivazioni scritte', run: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
+    ],
+    questions: ['Perché sulla sbarra MT di una nave la corrente di cortocircuito dipende da quanti gruppi sono in servizio, e che cosa comporta per le soglie 50 delle celle?', 'Perché il neutro BT a valle del trasformatore di servizio resta isolato (IT) mentre in una cabina a terra è collegato a terra (TN-S)?', 'Che cosa succede al quadro BT quando si mette a terra la cella del trasformatore? Come si garantisce la continuità per le utenze essenziali?'],
   },
 ];
 

@@ -5,8 +5,12 @@ import { MAT, makeCanvas, canvasTexture } from '../scene/materials.js';
 import { Painter } from './painter.js';
 import { setEmissive } from './din.js';
 import { mergeStatic } from '../scene/merge.js';
-import { applianceById, fmt, fmtW } from '../sim/norms.js';
+import { applianceById, fmt, fmtW, fmtA, fmtKV, SYSTEMS, sysShort } from '../sim/norms.js';
 import { lampType, motorRated } from '../catalog/defs/field.js';
+import { mtxRated } from '../catalog/defs/mt.js';
+
+/** Targhetta “440 V 60 Hz” / “6,6 kV 60 Hz” di un sistema di rete */
+const netLabel = (id, fallback = 'nave440') => sysShort(SYSTEMS[id] || SYSTEMS[fallback]);
 
 const STRIP_W = 0.11;
 const STRIP_H = 0.024;
@@ -475,8 +479,8 @@ function gensetModel(def, p, comp, terms) {
   const pl = new Painter(50, 34, p.emergenza ? '#f3d9c4' : '#ebe8df', 8);
   pl.text(comp.tag, -16, -8, 7, { weight: 800, color: '#111' });
   pl.text(`${p.Sn} kVA`, 6, -8, 5, { weight: 800, color: p.emergenza ? '#b3262c' : '#0f3d80' });
-  pl.text(p.net === 'nave690' ? '690 V 60 Hz' : p.net === 'it230' ? '400 V 50 Hz' : '440 V 60 Hz', 0, 4, 4.2, { weight: 700, color: '#222' });
-  pl.text(`neutro ${p.earth}`, 0, 10.5, 3.6, { weight: 600, color: '#555' });
+  pl.text(netLabel(p.net), 0, 4, 4.2, { weight: 700, color: '#222' });
+  pl.text(`neutro ${p.earth === 'NR' ? 'a R' : p.earth}`, 0, 10.5, 3.6, { weight: 600, color: '#555' });
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032), new THREE.MeshStandardMaterial({ map: pl.texture(), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
   lab.position.set(0.06, -0.025, D + 0.0003);
   g.add(lab);
@@ -519,7 +523,7 @@ function shoreModel(def, p, comp, terms) {
   led.userData.dynamic = true;
   const pl = new Painter(60, 14, '#20252b', 8);
   pl.text('BANCHINA', -8, -4.5, 5.2, { weight: 800, color: '#ffffff' });
-  pl.text(p.net === 'nave690' ? '690 V 60 Hz' : p.net === 'it230' ? '400 V 50 Hz' : '440 V 60 Hz', 0, 2.5, 3.6, { weight: 700, color: '#ff8a3d' });
+  pl.text(netLabel(p.net), 0, 2.5, 3.6, { weight: 700, color: '#ff8a3d' });
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.014), new THREE.MeshStandardMaterial({ map: pl.texture(), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
   lab.position.set(0, -0.03, z + 0.0005);
   g.add(lab);
@@ -540,9 +544,248 @@ function shoreModel(def, p, comp, terms) {
   };
 }
 
+// ── Media tensione ──────────────────────────────────────────────────────────────────
+let resinMat = null;
+const resin = () => resinMat || (resinMat = new THREE.MeshStandardMaterial({ color: 0x7a2a22, roughness: 0.35, metalness: 0.05 }));
+
+/** Morsettiera unica con posizioni ridistribuite (le celle MT hanno morsetti sopra e sotto con la stessa x) */
+function spreadStrip(terms, tag, y) {
+  const n = terms.length;
+  const spread = terms.map((t, i) => ({ ...t, x: 0.08 + (0.84 * i) / Math.max(1, n - 1) }));
+  return terminalStrip(spread, tag, y);
+}
+
+/** Triangolo giallo “tensione pericolosa” su canvas */
+function warningTag(text, sub) {
+  const pt = new Painter(60, 20, '#f7d417', 8);
+  pt.line([[-24, -7], [-18, 6], [-12, -7], [-24, -7]], '#111', 1.2);
+  pt.line([[-18, 3], [-18, -2]], '#111', 1.2);
+  pt.text(text, 7, 3.5, 4.4, { weight: 800, color: '#111', maxW: 40 });
+  if (sub) pt.text(sub, 7, -4.5, 3, { weight: 700, color: '#333', maxW: 40 });
+  return pt.texture();
+}
+
+function ledMesh(parent, x, y, z, color = 0x35d46a) {
+  const led = mesh(new THREE.CylinderGeometry(0.0022, 0.0022, 0.002, 12).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x1b1b1b, emissive: color, emissiveIntensity: 0 }), x, y, z, parent);
+  led.castShadow = false;
+  led.userData.dynamic = true;
+  return led;
+}
+
+/** Consegna MT del distributore: armadio del locale consegna con sigillo, cavi MT in arrivo dal basso */
+function mtinModel(def, p, comp, terms) {
+  const g = new THREE.Group();
+  const D = 0.07;
+  const sys = SYSTEMS[p.net] || SYSTEMS.mt20;
+  mesh(new RoundedBoxGeometry(0.115, 0.215, D, 2, 0.004), MAT.industrialGrey, 0, -0.03, D / 2, g);
+  mesh(new RoundedBoxGeometry(0.1, 0.19, 0.004, 2, 0.002), MAT.plasticGrey, 0, -0.03, D + 0.002, g); // portella
+  for (const sy of [-0.1, 0.04]) mesh(new THREE.BoxGeometry(0.006, 0.016, 0.004), MAT.aluminium, 0.044, sy, D + 0.006, g); // cerniere
+  mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.006, 12).rotateX(Math.PI / 2), MAT.brass, -0.038, -0.03, D + 0.007, g); // serratura/sigillo
+  const pl = new Painter(90, 46, '#20252b', 8);
+  pl.text('CONSEGNA MT', 0, 14, 7, { weight: 800, color: '#ffffff' });
+  pl.text(`${sysShort(sys)} · Icc ${fmt(p.Icc, 1)} kA`, 0, 4, 4.6, { weight: 700, color: '#ff8a3d' });
+  pl.text(`guasto a terra ${p.Ig} A · Re ${fmt(p.Re, 1)} Ω`, 0, -5, 3.8, { weight: 600, color: '#d6d8dc' });
+  pl.text('Distributore · CEI 0-16', 0, -14, 3.8, { weight: 600, color: '#aeb3b9' });
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.09, 0.046), new THREE.MeshStandardMaterial({ map: pl.texture(), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
+  lab.position.set(0, 0.025, D + 0.0045);
+  g.add(lab);
+  const warn = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.02), new THREE.MeshStandardMaterial({ map: warningTag('20 kV', 'non aprire'), roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
+  warn.position.set(0, -0.06, D + 0.0045);
+  g.add(warn);
+  const led = ledMesh(g, 0.035, 0.055, D + 0.0045);
+  // cavi MT in arrivo dal basso
+  for (const sx of [-0.02, 0, 0.02]) {
+    const c = mesh(new THREE.CylinderGeometry(0.004, 0.004, 0.05, 10), MAT.plasticBlack, sx, -0.16, D / 2, g);
+    c.castShadow = false;
+  }
+  const strip = spreadStrip(terms, comp.tag, 0.085);
+  g.add(strip.group);
+  return {
+    group: g,
+    terminals: strip.terminals,
+    parts: {},
+    interactive: [],
+    update(inst) {
+      if (!inst) return;
+      led.material.emissive.setHex(inst.state.on ? 0x22ff55 : 0xffb020);
+      setEmissive(led, inst.state.on ? 2.2 : 0.8);
+    },
+  };
+}
+
+/** Sinottico della cella: sbarra, sezionatore di linea, interruttore, sezionatore di terra (ridisegnato a ogni manovra) */
+function cellMimic(pt, s) {
+  const ink = '#1d2024';
+  pt.rect(0, 0, 40, 40, '#e9ebe6');
+  pt.rect(0, 17.5, 34, 1.6, ink); // sbarra
+  pt.line([[0, 17.5], [0, 13]], ink, 0.9);
+  // sezionatore di linea
+  pt.circle(0, 13, 1.2, { fill: ink });
+  pt.line(s.sez ? [[0, 13], [0, 6]] : [[0, 13], [5, 7.5]], s.sez ? '#1c7a47' : '#b3262c', 1.1);
+  pt.circle(0, 6, 1.2, { fill: ink });
+  pt.line([[0, 6], [0, 3]], ink, 0.9);
+  // interruttore
+  pt.rect(0, -1, 7, 8, s.int ? '#1c7a47' : '#ffffff', 0.6);
+  pt.strokeRect(0, -1, 7, 8, ink, 0.6, 0.6);
+  pt.text(s.int ? 'I' : 'O', 0, -1, 4, { weight: 800, color: s.int ? '#ffffff' : '#b3262c' });
+  pt.line([[0, -5], [0, -12]], ink, 0.9);
+  pt.circle(0, -12, 1.2, { fill: ink });
+  // sezionatore di terra sul lato cavo
+  pt.line(s.terra ? [[0, -12], [9, -12]] : [[0, -12], [7, -8]], s.terra ? '#1c7a47' : '#b3262c', 1.1);
+  pt.line([[9, -12], [12, -12]], ink, 0.9);
+  pt.line([[12, -15], [12, -9]], ink, 0.9);
+  pt.line([[13.5, -14], [13.5, -10]], ink, 0.9);
+  pt.line([[15, -13], [15, -11]], ink, 0.9);
+  pt.line([[0, -12], [0, -17]], ink, 0.9);
+  pt.text('cavo', 0, -18.8, 2.6, { weight: 700, color: '#555' });
+  pt.text(s.terra ? 'A TERRA' : s.int ? 'IN SERVIZIO' : s.sez ? 'APERTO' : 'SEZIONATO', -10, 8, 2.6, { weight: 800, color: s.terra ? '#1c7a47' : s.int ? '#1c7a47' : '#b3262c', align: 'left' });
+}
+
+/** Cella MT: scomparto con relè di protezione in alto, sinottico con le leve di manovra, VPIS e vano cavi */
+function mtcbModel(def, p, comp, terms) {
+  const g = new THREE.Group();
+  const D = 0.08;
+  mesh(new RoundedBoxGeometry(0.12, 0.225, D, 2, 0.004), MAT.steelCabinet, 0, -0.03, D / 2, g);
+  // vano relè (in alto)
+  mesh(new THREE.BoxGeometry(0.104, 0.05, 0.004), MAT.plasticDark, 0, 0.05, D + 0.002, g);
+  const rl = new Painter(100, 46, '#30343a', 8);
+  rl.rect(0, 14, 94, 14, '#ffffff', 0.8);
+  rl.text(`${comp.tag} · ${{ dg: 'DG · protezione generale', tr: 'protezione trasformatore', gen: 'interruttore di generatore', arr: 'arrivo / partenza' }[p.ruolo]}`, 0, 14, 4.4, { weight: 800, color: '#111', maxW: 90 });
+  rl.text(`51  I> ${fmtA(p.I1)} / ${fmt(p.t1, 2)} s`, -46, 3, 4, { weight: 700, color: '#7fe3a0', align: 'left' });
+  rl.text(`50  I>> ${fmtA(p.I2)} / ${fmt(p.t2, 2)} s`, -46, -5, 4, { weight: 700, color: '#7fe3a0', align: 'left' });
+  rl.text(`51N Io> ${fmtA(p.Io)} / ${fmt(p.to, 2)} s`, -46, -13, 4, { weight: 700, color: '#7fe3a0', align: 'left' });
+  rl.text(`Icu ${fmt(p.Icu, 1)} kA`, 44, -13, 3.4, { weight: 600, color: '#aeb3b9', align: 'right' });
+  rl.text('RELÈ', 44, 3, 3.4, { weight: 800, color: '#ff8a3d', align: 'right' });
+  const relay = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.046), new THREE.MeshStandardMaterial({ map: rl.texture(), roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2 }));
+  relay.position.set(0, 0.05, D + 0.0045);
+  g.add(relay);
+  const tripLed = ledMesh(g, 0.036, 0.038, D + 0.0046, 0xff3322);
+  // sinottico (canvas dinamico)
+  const mimic = new Painter(40, 40, '#e9ebe6', 8);
+  cellMimic(mimic, { sez: true, int: true, terra: false });
+  const mimicTex = mimic.texture();
+  const mimicMat = new THREE.MeshStandardMaterial({ map: mimicTex, roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2 });
+  const mimicMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.04, 0.04), mimicMat);
+  mimicMesh.position.set(-0.03, -0.01, D + 0.0045);
+  mimicMesh.userData.dynamic = true;
+  g.add(mimicMesh);
+  // leve e pulsanti di manovra (a destra del sinottico)
+  const hint = (m, action, text) => {
+    m.userData.action = action;
+    m.userData.hint = text;
+    return m;
+  };
+  const sezLever = hint(mesh(new RoundedBoxGeometry(0.022, 0.006, 0.012, 2, 0.0015), MAT.plasticDark, 0.028, 0.008, D + 0.008, g), 'sez', 'Sezionatore di linea: apri / chiudi');
+  const intOn = hint(mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.006, 20).rotateX(Math.PI / 2), MAT.plasticGreen, 0.02, -0.012, D + 0.005, g), 'int', 'Interruttore: I (chiudi) / O (apri)');
+  const intOff = hint(mesh(new THREE.CylinderGeometry(0.0045, 0.0045, 0.006, 20).rotateX(Math.PI / 2), MAT.plasticRed, 0.036, -0.012, D + 0.005, g), 'int', 'Interruttore: I (chiudi) / O (apri)');
+  const terraLever = hint(mesh(new RoundedBoxGeometry(0.022, 0.006, 0.012, 2, 0.0015), MAT.plasticYellow, 0.028, -0.032, D + 0.008, g), 'terra', 'Sezionatore di terra: chiudi / apri (solo a cella sezionata e senza tensione)');
+  const lb = new Painter(44, 48, '#e9ebe6', 8);
+  lb.text('SEZ.', 0, 18, 3.2, { weight: 800 });
+  lb.text('I   O', 0, -4, 3.2, { weight: 800 });
+  lb.text('TERRA', 0, -17, 3.2, { weight: 800 });
+  lb.text('VPIS', 0, -21.5, 2.6, { weight: 700, color: '#555' });
+  const lbm = new THREE.Mesh(new THREE.PlaneGeometry(0.044, 0.048), new THREE.MeshStandardMaterial({ map: lb.texture(), roughness: 0.5, polygonOffset: true, polygonOffsetFactor: -2 }));
+  lbm.position.set(0.028, -0.006, D + 0.0045);
+  g.add(lbm);
+  // indicatori di presenza tensione lato cavo
+  const vpis = [-0.008, 0, 0.008].map((sx) => ledMesh(g, 0.028 + sx, -0.045, D + 0.0046, 0xffb020));
+  // vano cavi con cartello
+  mesh(new THREE.BoxGeometry(0.104, 0.07, 0.003), MAT.plasticGrey, 0, -0.1, D + 0.0015, g);
+  const warn = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.02), new THREE.MeshStandardMaterial({ map: warningTag('cavi MT', 'vano sigillato'), roughness: 0.6, polygonOffset: true, polygonOffsetFactor: -2 }));
+  warn.position.set(0, -0.1, D + 0.0035);
+  g.add(warn);
+  const strip = spreadStrip(terms, comp.tag, 0.085);
+  g.add(strip.group);
+  let key = '';
+  let sezA = 0;
+  let terraA = 0;
+  return {
+    group: g,
+    terminals: strip.terminals,
+    parts: {},
+    interactive: [sezLever, intOn, intOff, terraLever],
+    update(inst, dt, t) {
+      if (!inst) return;
+      const s = inst.state;
+      const k = `${s.sez}|${s.int}|${s.terra}`;
+      if (k !== key) {
+        key = k;
+        const pt2 = new Painter(40, 40, '#e9ebe6', 8);
+        cellMimic(pt2, s);
+        mimicMat.map?.dispose();
+        mimicMat.map = pt2.texture();
+        mimicMat.needsUpdate = true;
+      }
+      sezA += ((s.sez ? -0.6 : 0.6) - sezA) * Math.min(1, dt * 18);
+      sezLever.rotation.z = sezA;
+      terraA += ((s.terra ? -0.6 : 0.6) - terraA) * Math.min(1, dt * 18);
+      terraLever.rotation.z = terraA;
+      intOn.position.z = D + 0.005 - (s.int ? 0.002 : 0);
+      intOff.position.z = D + 0.005 - (s.int ? 0 : 0.002);
+      for (const l of vpis) setEmissive(l, s.vpisCable ? 2 : 0);
+      tripLed.material.emissive.setHex(s.tripped ? 0xff3322 : 0x35d46a);
+      setEmissive(tripLed, s.tripped ? (Math.sin(t * 8) > 0 ? 2.5 : 0.3) : s.int ? 1.8 : 0);
+    },
+  };
+}
+
+/** Trasformatore MT/BT in resina: tre colonne di avvolgimenti incapsulati su carrello, sbarre MT in alto, BT di lato */
+function mtxModel(def, p, comp, terms) {
+  const g = new THREE.Group();
+  const r = mtxRated(p);
+  const D = 0.1;
+  // carrello e gioghi del nucleo
+  mesh(new THREE.BoxGeometry(0.3, 0.012, D), MAT.industrialDark, 0, -0.13, D / 2, g);
+  for (const sx of [-0.12, 0.12]) mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.02, 14).rotateZ(Math.PI / 2), MAT.plasticBlack, sx, -0.142, D / 2, g);
+  mesh(new THREE.BoxGeometry(0.26, 0.03, 0.045), MAT.industrialGrey, 0, 0.055, D / 2, g); // giogo superiore
+  mesh(new THREE.BoxGeometry(0.26, 0.03, 0.045), MAT.industrialGrey, 0, -0.108, D / 2, g); // giogo inferiore
+  // colonne: avvolgimento BT (interno) e MT in resina (esterno)
+  for (const sx of [-0.09, 0, 0.09]) {
+    mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.135, 28, 1, true), resin(), sx, -0.027, D / 2, g);
+    mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.004, 28), MAT.plasticBlack, sx, 0.04, D / 2, g);
+    mesh(new THREE.CylinderGeometry(0.036, 0.036, 0.004, 28), MAT.plasticBlack, sx, -0.093, D / 2, g);
+    // terminale MT in alto (isolatore) e sbarra
+    mesh(new THREE.CylinderGeometry(0.006, 0.008, 0.016, 12), MAT.plasticIvory, sx, 0.078, D / 2, g);
+    mesh(new THREE.BoxGeometry(0.03, 0.004, 0.012), MAT.copper, sx, 0.088, D / 2, g);
+  }
+  // sbarre BT di lato (4 barre in rame)
+  for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(0.006, 0.09, 0.014), MAT.copper, 0.15 + i * 0.009, -0.03, D / 2 + 0.01, g);
+  // targa
+  const np = new Painter(74, 40, '#d9dcdf', 8);
+  np.text(`${comp.tag} · ${p.Sn} kVA`, 0, 14, 5.6, { weight: 800 });
+  np.text(`${fmtKV(r.s1.Vll)} / ${fmtKV(r.s2.Vll)} · ${p.gruppo}`, 0, 5, 4.2, { weight: 700, color: '#0f3d80' });
+  np.text(`vcc ${p.vcc} % · ${r.s1.f} Hz · resina`, 0, -3, 3.6, { weight: 600 });
+  np.text(`In ${fmtA(r.In1)} / ${fmtA(r.In2)}`, 0, -11, 3.6, { weight: 600 });
+  np.text(`neutro BT ${p.earthBT === 'IT' ? 'isolato' : 'a terra'}`, 0, -17.5, 3, { weight: 600, color: '#555' });
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(0.074, 0.04), new THREE.MeshStandardMaterial({ map: np.texture(), metalness: 0.4, roughness: 0.4 }));
+  plate.position.set(-0.165, -0.03, D / 2 + 0.024);
+  g.add(plate);
+  mesh(new THREE.BoxGeometry(0.078, 0.044, 0.003), MAT.industrialGrey, -0.165, -0.03, D / 2 + 0.022, g);
+  const led = ledMesh(g, -0.135, -0.058, D / 2 + 0.0245, 0xff3322);
+  const warn = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.02), new THREE.MeshStandardMaterial({ map: warningTag(fmtKV(r.s1.Vll), 'alta tensione'), roughness: 0.6, side: THREE.DoubleSide }));
+  warn.position.set(0, -0.118, D + 0.002);
+  g.add(warn);
+  const strip = spreadStrip(terms, comp.tag, 0.1);
+  g.add(strip.group);
+  const hum = new THREE.Group();
+  return {
+    group: g,
+    terminals: strip.terminals,
+    parts: {},
+    interactive: [],
+    update(inst, dt, t) {
+      if (!inst) return;
+      const s = inst.state;
+      led.material.emissive.setHex(s.overtemp ? 0xff3322 : s.live ? 0x35d46a : 0xffb020);
+      setEmissive(led, s.overtemp ? (Math.sin(t * 8) > 0 ? 2.5 : 0.3) : s.live ? 1.8 : 0);
+      void hum;
+    },
+  };
+}
+
 export function buildFieldModel(def, params, comp) {
   const terms = def.terminals(params);
-  const map = { lamp: lampModel, xs: socketModel, sa: switchModel, sd: switchModel, si: switchModel, sp: switchModel, ss: stationModel, pir: pirModel, hb: bellModel, m3: motorModel, genset: gensetModel, shore: shoreModel };
+  const map = { lamp: lampModel, xs: socketModel, sa: switchModel, sd: switchModel, si: switchModel, sp: switchModel, ss: stationModel, pir: pirModel, hb: bellModel, m3: motorModel, genset: gensetModel, shore: shoreModel, mtin: mtinModel, mtcb: mtcbModel, mtx: mtxModel };
   const fn = map[def.type];
   const m = fn(def, params, comp, terms);
   m.type = def.type;

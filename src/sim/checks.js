@@ -2,9 +2,11 @@
 // Ogni verifica restituisce { id, group, level: 'ok'|'warn'|'error'|'info', title, detail, comps[], wires[] }.
 import { DEFS } from '../catalog/defs/index.js';
 import { resolveParams } from '../catalog/defs/common.js';
-import { iz, UL, DEFAULT_SYS, fmt, fmtA, fmtW } from './norms.js';
+import { wireIz, sectionLabel, UL, DEFAULT_SYS, fmt, fmtA, fmtW } from './norms.js';
 import { cabs, csub } from './complex.js';
 import { gensetRated } from '../catalog/defs/nautico.js';
+import { mtxRated } from '../catalog/defs/mt.js';
+import { runMTChecks } from './mtchecks.js';
 
 const key = (r) => r.c + '.' + r.t;
 
@@ -94,12 +96,19 @@ function gensetSupply(gensets) {
   return { sys: '3F', earth, Icc: Icc / 1000, Re: Number.isFinite(Re) ? Re : 1, Pc: null, Sn };
 }
 
+/** Parametri “di fornitura” equivalenti con la consegna in media tensione (cabina MT/BT) */
+function mtinSupply(mtins) {
+  const p = resolveParams(DEFS.mtin, mtins[0].params);
+  return { sys: '3F', earth: 'TN-S', Icc: p.Icc, Re: p.Re, Pc: null, Ig: p.Ig };
+}
+
 export const CHECK_GROUPS = [
   { id: 'sicurezza', label: 'Sicurezza delle persone' },
   { id: 'dimensionamento', label: 'Dimensionamento e coordinamento' },
   { id: 'conformita', label: 'Regola dell’arte' },
   { id: 'esercizio', label: 'Esercizio e carichi' },
   { id: 'nave', label: 'Impianto di bordo (registri navali)' },
+  { id: 'mt', label: 'Media tensione (cabina MT/BT, CEI 0-16 e ABB QT2)' },
 ];
 
 export function runChecks(project, sim) {
@@ -110,12 +119,24 @@ export function runChecks(project, sim) {
   const sourceIds = new Set(sources.map((c) => c.id));
   const supplyComp = sources.find((c) => c.type === 'supply') || null;
   const gensets = sources.filter((c) => c.type === 'genset');
-  const sp = supplyComp ? resolveParams(DEFS.supply, supplyComp.params) : gensetSupply(gensets);
+  const mtins = sources.filter((c) => c.type === 'mtin');
+  const sp = supplyComp ? resolveParams(DEFS.supply, supplyComp.params) : mtins.length ? mtinSupply(mtins) : gensetSupply(gensets);
   const sys = sim?.env?.sys || DEFAULT_SYS;
   const tag = (id) => project.comp(id)?.tag || id;
 
+  // media tensione a monte (consegna MT o generatori MT): le utenze BT vedono la Icc al secondario dei trasformatori
+  // e il sistema di neutro deciso dal trasformatore; la Icc sulla sbarra MT resta per le verifiche delle celle
+  const mtxs = g.comps.filter((x) => x.def.type === 'mtx' && project.wires.some((w) => w.a.c === x.c.id || w.b.c === x.c.id));
+  const mtSource = mtins.length > 0 || gensets.some((c) => gensetRated(resolveParams(DEFS.genset, c.params)).sys.mt);
+  const IccMT = mtSource ? sp.Icc : null;
+  if (mtSource && mtxs.length) {
+    sp.Icc = Math.max(...mtxs.map((x) => mtxRated(x.p, IccMT).Icc2)) / 1000;
+    sp.earth = mtxs.some((x) => x.p.earthBT === 'IT') ? 'IT' : 'TN-S';
+  }
+
   const loads = g.comps.filter((x) => x.load);
-  const protections = g.comps.filter((x) => x.prot && x.prot.kind !== 'isolator' && x.prot.kind !== 'generator');
+  const protections = g.comps.filter((x) => x.prot && !['isolator', 'generator', 'transformer'].includes(x.prot.kind) && !x.prot.mt);
+  const mtcells = g.comps.filter((x) => x.prot?.kind === 'mtcb');
   const overcurrent = (x) => x.prot && x.prot.overcurrent && !x.prot.overloadOnly;
 
   // ── Collegamento alla sorgente ──────────────────────────────────────────────────
@@ -292,16 +313,16 @@ export function runChecks(project, sim) {
     }
     const loaded = x.prot.poles.length >= 3 ? 3 : 2;
     const ws = [...wires].map((id) => project.wire(id)).filter(Boolean);
-    const minS = ws.length ? Math.min(...ws.map((w) => w.section)) : null;
-    const Iz = minS ? iz(minS, loaded) : null;
+    const weakest = ws.length ? ws.reduce((m, w) => (wireIz(w, loaded) < wireIz(m, loaded) ? w : m)) : null;
+    const Iz = weakest ? wireIz(weakest, loaded) : null;
     const In = x.prot.In;
     const parts = [];
     let level = 'ok';
     if (Iz !== null) {
       if (In > Iz) {
         level = 'error';
-        parts.push(`In = ${In} A > Iz = ${fmt(Iz, 1)} A del cavo da ${fmt(minS, 1)} mm²: il cavo NON è protetto dal sovraccarico. Aumenta la sezione o riduci In.`);
-      } else parts.push(`In = ${In} A ≤ Iz = ${fmt(Iz, 1)} A (cavo più piccolo: ${fmt(minS, 1)} mm²).`);
+        parts.push(`In = ${fmt(In, 0)} A > Iz = ${fmt(Iz, 1)} A del cavo da ${sectionLabel(weakest)}: il cavo NON è protetto dal sovraccarico. Aumenta la sezione o riduci In.`);
+      } else parts.push(`In = ${fmt(In, 0)} A ≤ Iz = ${fmt(Iz, 1)} A (cavo più piccolo: ${sectionLabel(weakest)}).`);
     }
     if (fed.length) {
       if (Ib > In) {
@@ -379,7 +400,7 @@ export function runChecks(project, sim) {
       const Icm = x.prot.pdi * n;
       const okI = x.prot.pdi >= Iac;
       const okM = Icm >= Ip;
-      push({ id: 'reg-pdi-' + x.c.id, group: 'nave', level: okI && okM ? 'ok' : 'error', title: `${x.c.tag}: Icu ≥ Iac e Icm ≥ Ip`, detail: `Cortocircuito dei generatori ${fmt(Iac, 2)} kA, picco ≈ ${fmt(Ip, 2)} kA (fattore 1,7); Icu = ${x.prot.pdi} kA, Icm ≈ ${fmt(Icm, 1)} kA (n = ${n}). ${okI && okM ? 'Verificato per il singolo apparecchio: i registri non ammettono la protezione di back-up.' : 'Insufficiente: scegli un potere di interruzione maggiore.'}`, comps: [x.c.id] });
+      push({ id: 'reg-pdi-' + x.c.id, group: 'nave', level: okI && okM ? 'ok' : 'error', title: `${x.c.tag}: Icu ≥ Iac e Icm ≥ Ip`, detail: `${mtxs.length ? 'Cortocircuito al secondario del trasformatore di servizio' : 'Cortocircuito dei generatori'} ${fmt(Iac, 2)} kA, picco ≈ ${fmt(Ip, 2)} kA (fattore 1,7); Icu = ${x.prot.pdi} kA, Icm ≈ ${fmt(Icm, 1)} kA (n = ${n}). ${okI && okM ? 'Verificato per il singolo apparecchio: i registri non ammettono la protezione di back-up.' : 'Insufficiente: scegli un potere di interruzione maggiore.'}`, comps: [x.c.id] });
     }
 
     // utenze essenziali: alimentazione di emergenza tramite ATS/UPS, presenza di una sorgente di emergenza
@@ -445,6 +466,9 @@ export function runChecks(project, sim) {
       push({ id: 'dv-none', group: 'esercizio', level: 'info', title: 'Cadute di tensione', detail: 'Alimenta l’impianto e accendi le utenze monofase (lampade, apparecchi collegati alle prese) per misurare le cadute di tensione.' });
     }
   }
+
+  // ── Media tensione: celle, trasformatori, selettività MT/BT ─────────────────────
+  runMTChecks({ g, project, sim, push, IccMT, mtins, gensets, mtxs, mtcells, loads, upstreamChain, bfs, sourceIds, overcurrent });
 
   // ── Componenti non collegati ────────────────────────────────────────────────────
   const orphans = g.comps.filter((x) => !x.def.fixed && !project.wires.some((w) => w.a.c === x.c.id || w.b.c === x.c.id));

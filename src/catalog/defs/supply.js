@@ -1,7 +1,7 @@
 // Alimentazione: punto di consegna (rete + contatore con limitatore), collettore di terra, morsetti.
 import { source, imp, res, sw, T, P } from './common.js';
 import { csub, cabs, power } from '../../sim/complex.js';
-import { SYSTEMS, fmtV, fmtA, fmtW, fmt } from '../../sim/norms.js';
+import { SYSTEMS, BT_SYSTEMS, sysOptions, fmtV, fmtA, fmtW, fmt } from '../../sim/norms.js';
 
 const PHASES = ['L1', 'L2', 'L3'];
 
@@ -23,7 +23,7 @@ export const supply = {
       { value: '1F', label: 'Monofase 230 V (L-N)' },
       { value: '3F', label: 'Trifase 400 V (L1-L2-L3-N)' },
     ], '1F'),
-    P.select('net', 'Tensione e frequenza', Object.values(SYSTEMS).map((s) => ({ value: s.id, label: s.label })), 'it230'),
+    P.select('net', 'Tensione e frequenza', sysOptions(BT_SYSTEMS), 'it230'),
     P.select('earth', 'Sistema di distribuzione', [
       { value: 'TT', label: 'TT — utenza alimentata in BT con dispersore proprio' },
       { value: 'TN-S', label: 'TN-S — utenza con cabina propria (PE separato)' },
