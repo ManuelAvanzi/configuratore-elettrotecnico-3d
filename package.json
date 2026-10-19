@@ -9,6 +9,7 @@
     "dev:quest": "vite --mode quest --host",
     "build": "vite build",
     "preview": "vite preview",
+    "pubblica": "node scripts/pubblica.mjs",
     "test": "node tests/sim.test.mjs && node tests/lessons.test.mjs && node tests/exercises.test.mjs",
     "test:sim": "node tests/sim.test.mjs",
     "test:lezioni": "node tests/lessons.test.mjs",
