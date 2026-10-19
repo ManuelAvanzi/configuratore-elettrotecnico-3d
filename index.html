@@ -4,9 +4,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0e1115" />
-    <meta name="description" content="Dispositivi elettrotecnici: configuratore 3D. Il laboratorio di elettrotecnica in 3D e realtà virtuale per gli istituti tecnici: tutorial guidato per chi parte da zero e laboratorio completo con simulazione, verifiche ed esercitazioni." />
+    <meta name="description" content="Dispositivi elettrotecnici: configuratore 3D. Il laboratorio di elettrotecnica in 3D e realtà virtuale per gli istituti tecnici: tutorial guidato per chi parte da zero e laboratorio completo con simulazione, verifiche, esercitazioni e presentazione finale." />
     <title>Configuratore Elettrotecnico 3D — CarraroLab</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF5900' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/%3E%3C/svg%3E" />
+    <link rel="preload" as="image" href="img/classe-hero.jpg" fetchpriority="high" />
   </head>
   <body class="home">
     <header class="nav">
@@ -16,41 +17,69 @@
           <span class="brand-text"><b>Configuratore elettrotecnico 3D</b><span><span class="lab">CarraroLab</span> · Dispositivi elettrotecnici</span></span>
         </a>
         <nav class="links">
+          <a href="#inizia">Inizia</a>
           <a href="#laboratorio">Il laboratorio</a>
           <a href="#lezioni">Le lezioni</a>
+          <a href="#esercitazioni">In classe</a>
           <a href="#dove">Dove funziona</a>
         </nav>
         <a class="nav-cta" href="./laboratorio.html">Apri il laboratorio</a>
       </div>
     </header>
 
-    <section class="hero">
-      <div class="wrap hero-in">
-        <div class="hero-row">
-          <div class="hero-text">
-            <div class="eyebrow">Elettronica ed Elettrotecnica · Istituti tecnici</div>
-            <h1>Il laboratorio di elettrotecnica, in 3D e in realtà virtuale.</h1>
-            <p class="lead">Quadri elettrici, collegamenti e protezioni come in un vero laboratorio: si monta, si cabla, si dà corrente e si vede che cosa succede. Sul PC, sulla LIM o con il visore.</p>
-          </div>
-          <figure class="hero-shot"><img src="img/hero.jpg" alt="Il banco didattico: quadro elettrico e pannello utenze con le lampade accese" onerror="this.parentElement.classList.add('noimg')" /></figure>
+    <!-- Hero cinematografico: una foto a tutto schermo, il titolo sopra, tre scene selezionabili -->
+    <section class="cinema" aria-label="Il laboratorio di elettrotecnica in 3D e in realtà virtuale">
+      <div class="scenes" aria-hidden="true">
+        <img class="scene active" src="img/classe-hero.jpg" alt="" width="1920" height="1080" fetchpriority="high" data-pos="62% 50%" />
+        <img class="scene" src="img/hero.jpg" alt="" loading="lazy" data-pos="50% 40%" />
+        <img class="scene" src="img/quadro.jpg" alt="" loading="lazy" data-pos="50% 50%" />
+      </div>
+      <div class="shade"></div>
+      <div class="cinema-copy">
+        <div class="kicker"><span class="dot"></span> Un laboratorio didattico, nel browser e in VR</div>
+        <h1>Configuratore 3D di <em>impianti e quadri elettrici.</em></h1>
+        <p>Si monta, si cabla, si dà corrente e si vede che cosa succede: come in un vero laboratorio di elettrotecnica, sul PC, sulla LIM o con il visore.</p>
+        <div class="cinema-actions">
+          <a class="cbtn light" href="./tutorial.html">Inizia dal tutorial <span data-i="next"></span></a>
+          <a class="cbtn outline" href="./laboratorio.html"><span data-i="play"></span> Entra nel laboratorio</a>
         </div>
-        <div class="choose-title">Come vuoi iniziare?</div>
-        <div class="choices">
-          <a class="choice primary" href="./tutorial.html">
-            <span class="choice-ic"><span data-i="school"></span></span>
-            <span class="choice-kicker">Per chi parte da zero</span>
-            <b>Tutorial guidato</b>
-            <span class="choice-text">Una spiegazione alla volta, con il punto da cliccare evidenziato, fino a far funzionare il circuito.</span>
-            <span class="choice-meta"><span data-i="timer"></span> 5 lezioni da 10–15 minuti</span>
-            <span class="choice-go">Inizia il tutorial <span data-i="next"></span></span>
+        <div class="cinema-note">Istituti tecnici · Elettronica ed Elettrotecnica · scheda del catalogo CarraroLab</div>
+      </div>
+      <div class="cinema-bottom">
+        <a class="scroll-cue" href="#inizia"><span>↓</span> Scopri il laboratorio</a>
+        <div class="scene-selector" aria-label="Immagini del laboratorio">
+          <button data-scene="0" aria-pressed="true"><small>01</small>In classe</button>
+          <button data-scene="1" aria-pressed="false"><small>02</small>Il banco</button>
+          <button data-scene="2" aria-pressed="false"><small>03</small>Il quadro</button>
+        </div>
+      </div>
+      <span class="credit">In classe: immagine illustrativa · Banco e quadro: viste del laboratorio</span>
+    </section>
+
+    <!-- Da dove iniziare: due percorsi con fotografia -->
+    <section class="block" id="inizia">
+      <div class="wrap">
+        <div class="eyebrow">Come vuoi iniziare?</div>
+        <h2>Due porte d’ingresso, lo stesso laboratorio.</h2>
+        <p class="sub">Chi parte da zero segue il tutorial, una spiegazione alla volta. Chi sa già, e il docente, aprono il configuratore completo.</p>
+        <div class="starts">
+          <a class="start primary" href="./tutorial.html">
+            <span class="start-photo"><img src="img/classe-pc.jpg" alt="Due studenti al computer seguono il tutorial del configuratore" loading="lazy" width="1536" height="1024" /></span>
+            <span class="start-body">
+              <span class="start-kicker">Per chi parte da zero</span>
+              <b>Tutorial guidato</b>
+              <span class="start-text">Cinque lezioni da 10–15 minuti: il punto da cliccare è evidenziato e il configuratore controlla ogni passo. Se ti blocchi, “Mostrami come” lo fa al posto tuo.</span>
+              <span class="start-go">Inizia il tutorial <span data-i="next"></span></span>
+            </span>
           </a>
-          <a class="choice" href="./laboratorio.html">
-            <span class="choice-ic"><span data-i="cpu"></span></span>
-            <span class="choice-kicker">Per chi sa già · per il docente</span>
-            <b>Laboratorio completo</b>
-            <span class="choice-text">Il configuratore libero: 31 componenti reali, cablaggio, simulazione, verifiche normative, esercitazioni e scheda tecnica.</span>
-            <span class="choice-meta"><span data-i="board"></span> Progetta e verifica il tuo impianto</span>
-            <span class="choice-go">Apri il laboratorio <span data-i="next"></span></span>
+          <a class="start" href="./laboratorio.html">
+            <span class="start-photo"><img src="img/classe-vr.jpg" alt="Uno studente con il visore cabla un quadro davanti alla LIM mentre la classe guarda" loading="lazy" width="1536" height="1024" /></span>
+            <span class="start-body">
+              <span class="start-kicker">Per chi sa già · per il docente</span>
+              <b>Laboratorio completo</b>
+              <span class="start-text">Il configuratore libero: 31 componenti reali, cablaggio, simulazione elettrica, verifiche normative, esercitazioni, presentazione e scheda tecnica. Anche in VR.</span>
+              <span class="start-go">Apri il laboratorio <span data-i="next"></span></span>
+            </span>
           </a>
         </div>
       </div>
@@ -77,7 +106,7 @@
             <li><span data-i="check"></span>Acquisire competenze tecniche con attività pratiche simulate</li>
             <li><span data-i="check"></span>Sviluppare autonomia progettuale e riflessione tecnica</li>
           </ul>
-          <p class="sub" style="margin-top: 14px"><b>Output finale:</b> un impianto configurato in ambiente virtuale, esplorabile in tutte le sue parti e presentabile come esito di un’attività progettuale tecnica.</p>
+          <p class="output"><b>Output finale:</b> un impianto configurato in ambiente virtuale, esplorabile in tutte le sue parti e presentabile come esito di un’attività progettuale tecnica.</p>
         </div>
         <figure class="shot"><img src="img/quadro.jpg" alt="Il quadro elettrico del banco didattico con i dispositivi su guida DIN" loading="lazy" onerror="this.parentElement.classList.add('noimg')" /></figure>
       </div>
@@ -92,7 +121,7 @@
       </div>
     </section>
 
-    <section class="block light">
+    <section class="block light" id="esercitazioni">
       <div class="wrap">
         <div class="eyebrow dark">Laboratorio completo</div>
         <h2>Dal progetto alla presentazione</h2>
@@ -130,6 +159,20 @@
           <div class="where-card"><span data-i="mouse"></span><b>PC e Mac</b><p>Mouse e tastiera, direttamente dal browser. Non serve installare niente.</p></div>
           <div class="where-card"><span data-i="present"></span><b>LIM e proiettore</b><p>Visione condivisa per tutta la classe: la LIM virtuale mostra il passo o il cruscotto dell’impianto.</p></div>
           <div class="where-card"><span data-i="vr"></span><b>Visore Meta Quest</b><p>Si apre l’indirizzo nel browser del visore e si preme “Entra in VR”: tablet sul controller, teletrasporto, grilletto per agire.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Chiusura: la foto della classe torna come invito -->
+    <section class="closing">
+      <img src="img/classe-hero.jpg" alt="" loading="lazy" aria-hidden="true" />
+      <div class="closing-shade"></div>
+      <div class="wrap closing-in">
+        <h2>Pronti a dare corrente?</h2>
+        <p>Una classe, un banco virtuale, un impianto da progettare e presentare.</p>
+        <div class="cinema-actions">
+          <a class="cbtn light" href="./tutorial.html">Inizia dal tutorial <span data-i="next"></span></a>
+          <a class="cbtn outline" href="./laboratorio.html"><span data-i="play"></span> Entra nel laboratorio</a>
         </div>
       </div>
     </section>

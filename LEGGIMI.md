@@ -11,7 +11,7 @@ e, dal browser del visore (Meta Quest), in **realtà virtuale** con il pulsante 
 
 | Pagina | File | Per chi |
 |---|---|---|
-| **Homepage** | `index.html` | presenta il laboratorio e fa scegliere come iniziare (due pulsanti) |
+| **Homepage** | `index.html` | presenta il laboratorio con un hero fotografico a tutto schermo (tre scene: classe, banco, quadro) e fa scegliere come iniziare (due card con foto) |
 | **Tutorial guidato** | `tutorial.html` | chi parte da zero: una spiegazione alla volta, il punto da cliccare evidenziato |
 | **Laboratorio completo** | `laboratorio.html` | chi sa già e il docente: configuratore libero con tutte le funzioni |
 
@@ -153,7 +153,9 @@ src/
   presets/       modelli predefiniti
   report/        scheda tecnica stampabile
   styles/        app.css (laboratorio), tutorial.css, home.css
-public/img/      immagini della homepage e copertine delle lezioni (ricavate dal 3D)
+public/img/      immagini della homepage e copertine delle lezioni (ricavate dal 3D); le tre foto della classe
+                 (classe-hero, classe-vr, classe-pc) sono immagini illustrative generate con l'AI (Canva,
+                 19/10/2026), non fotografie reali: la homepage lo dichiara nella didascalia dell'hero
 tests/           collaudo in Node: simulatore (sim.test.mjs), lezioni del tutorial (lessons.test.mjs),
                  esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove)
 ```
