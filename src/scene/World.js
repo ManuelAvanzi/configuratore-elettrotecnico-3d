@@ -391,9 +391,10 @@ export class World {
       m.position.set(x, y, Z1 / 2);
       g.add(m);
     };
-    pipe(0.06, 1.3, H - 0.32, MAT.plasticMid);
-    pipe(0.04, 1.52, H - 0.3, MAT.plasticRed);
-    pipe(0.05, 2.9, H - 0.32, MAT.plasticBlue);
+    // (lungo la paratia di destra, fuori dalle inquadrature “Aula” e “Panoramica”)
+    pipe(0.06, 4.1, H - 0.36, MAT.plasticMid);
+    pipe(0.04, 4.35, H - 0.34, MAT.plasticRed);
+    pipe(0.05, 4.6, H - 0.36, MAT.plasticBlue);
     box(0.4, 0.04, Z1, MAT.galvanized, -2.4, H - 0.3, Z1 / 2, g);
     for (let z = 0.3; z < Z1; z += 0.6) box(0.4, 0.06, 0.02, MAT.galvanized, -2.4, H - 0.28, z, g);
     // plafoniere stagne con gabbia
@@ -995,7 +996,7 @@ export class World {
       con.add(scr);
     }
     for (let i = 0; i < 8; i++) box(0.05, 0.02, 0.05, i % 3 ? MAT.plasticDark : MAT.plasticRed, -0.7 + i * 0.08, 0.95, 0.15, con);
-    con.position.set(0.2, 0, 2.6);
+    con.position.set(-1.2, 0, 4.7);
     g.add(con);
     // armadietti in acciaio
     for (const z of [0.5, 1.6]) {

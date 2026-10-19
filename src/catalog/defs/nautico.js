@@ -727,7 +727,7 @@ export const ups = {
     P.select('aut', 'Autonomia della batteria a pieno carico', [5, 10, 30, 60], 10, { unit: 'min' }),
   ],
   terminals: () => [T('1', '1', 'L', 'top', 0.25, 'line'), T('N1', 'N1', 'N', 'top', 0.75, 'line'), T('2', '2', 'L', 'bottom', 0.25, 'load'), T('N2', 'N2', 'N', 'bottom', 0.75, 'load')],
-  init: () => ({ mode: 'spento', batt: 1, P: 0, vin: 0 }),
+  init: () => ({ mode: 'spento', batt: 1, P: 0, vin: 0, armed: false }),
   elements(inst, env) {
     const s = inst.state;
     const p = inst.params;
@@ -746,7 +746,8 @@ export const ups = {
     const Vph = sysOf(ctx.env).Vph;
     s.vin = cabs(ctx.Vd('1', 'N1'));
     const inOk = s.vin > 0.7 * Vph;
-    const mode = inOk ? 'rete' : s.batt > 0 ? 'batteria' : 'spento';
+    if (inOk) s.armed = true; // l'UPS entra in servizio con la rete: a impianto mai alimentato resta spento
+    const mode = inOk ? 'rete' : s.armed && s.batt > 0 ? 'batteria' : 'spento';
     s.P = s.mode === 'batteria' ? power(csub(ctx.V('2'), ctx.V('#u')), ctx.I('s')).P : s.mode === 'rete' ? power(ctx.Vd('1', 'N1'), ctx.I('p')).P : 0;
     if (mode !== s.mode) {
       if (mode === 'batteria') ctx.emit({ level: 'warn', text: `${inst.tag}: manca la rete — uscita alimentata dalla BATTERIA (autonomia ${fmt(p.aut * s.batt, 0)} min a pieno carico).`, sound: 'relay' });
