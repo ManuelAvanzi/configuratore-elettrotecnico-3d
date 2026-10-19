@@ -11,7 +11,7 @@ e, dal browser del visore (Meta Quest), in **realtà virtuale** con il pulsante 
 
 | Pagina | File | Per chi |
 |---|---|---|
-| **Homepage** | `index.html` | marchio testuale “elettrolab”, hero fotografico a tutto schermo (tre scene: classe, banco, quadro), “come funziona” in tre punti, “inizia da qui” con tre card (tutorial, laboratorio, esercitazioni), piede con il logo CarraroLab |
+| **Homepage** | `index.html` | marchio “ELETTROLAB”, hero fotografico a tutto schermo (tre scene: classe, banco, quadro), “come funziona” in tre punti, “inizia da qui” con tre card (tutorial, laboratorio, esercitazioni), piede con il logo CarraroLab |
 | **Tutorial guidato** | `tutorial.html` | chi parte da zero: una spiegazione alla volta, il punto da cliccare evidenziato |
 | **Laboratorio completo** | `laboratorio.html` | chi sa già e il docente: configuratore libero con tutte le funzioni |
 

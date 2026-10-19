@@ -29,12 +29,7 @@ body.home { margin: 0; background: var(--paper); color: var(--ink); font-family:
 
 /* ── Intestazione, sopra la foto ─────────────────────────────────────────── */
 .site-header { position: absolute; top: 0; left: 0; right: 0; z-index: 10; height: 94px; padding: 0 var(--gutter); display: flex; align-items: center; gap: 36px; color: #fff; border-bottom: 1px solid rgba(255, 255, 255, 0.16); background: linear-gradient(rgba(0, 0, 0, 0.2), transparent); }
-.wordmark { display: flex; align-items: center; gap: 10px; }
-.wordmark svg { flex: none; opacity: 0.95; }
-.wordmark span { display: flex; flex-direction: column; line-height: 1; }
-.wordmark b { font-family: var(--font-ui); font-weight: 800; font-size: 24px; letter-spacing: -0.03em; }
-.wordmark b em { font-style: normal; color: var(--accent-soft); }
-.wordmark small { font-family: var(--font-ui); font-weight: 700; font-size: 9.5px; letter-spacing: 0.2em; text-transform: uppercase; color: #d9d6cd; margin-top: 5px; }
+.wordmark { font-family: var(--font-ui); font-weight: 800; font-size: 19px; letter-spacing: 0.14em; color: #fff; }
 .site-nav { display: flex; gap: 26px; margin-left: auto; }
 .site-nav a { font-size: 14px; font-weight: 500; color: #eeede5; }
 .site-nav a:hover { opacity: 0.75; }
@@ -46,15 +41,15 @@ body.home { margin: 0; background: var(--paper); color: var(--ink); font-family:
 .scenes, .shade { position: absolute; inset: 0; }
 .scenes { z-index: -2; }
 .scene { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 62% 50%; opacity: 0; transition: opacity 1.4s ease; }
+.scene.render { filter: brightness(0.55) saturate(0.85); }
 .scene.active { opacity: 1; animation: breathe 16s ease-in-out infinite alternate; }
 @keyframes breathe { from { transform: scale(1); } to { transform: scale(1.04); } }
 @media (prefers-reduced-motion: reduce) { .scene.active { animation: none; } }
-.shade { z-index: -1; background: linear-gradient(90deg, rgba(10, 12, 16, 0.82) 0%, rgba(10, 12, 16, 0.45) 38%, rgba(10, 12, 16, 0.06) 72%), linear-gradient(0deg, rgba(10, 12, 16, 0.7), transparent 30%, transparent 80%, rgba(10, 12, 16, 0.3)); }
+.shade { z-index: -1; background: linear-gradient(90deg, rgba(10, 12, 16, 0.88) 0%, rgba(10, 12, 16, 0.62) 40%, rgba(10, 12, 16, 0.12) 75%), linear-gradient(0deg, rgba(10, 12, 16, 0.7), transparent 30%, transparent 80%, rgba(10, 12, 16, 0.35)); }
 .cinema-copy { width: 100%; max-width: 860px; }
 .kicker { display: flex; align-items: center; gap: 11px; font-family: var(--font-ui); font-weight: 800; font-size: 10.5px; letter-spacing: 0.24em; text-transform: uppercase; color: #e9e3da; margin-bottom: 32px; }
 .kicker .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent-soft); box-shadow: 0 0 0 5px rgba(255, 217, 194, 0.12); }
 .cinema h1 { font-family: var(--font-ui); font-weight: 500; font-size: clamp(46px, 5.8vw, 88px); line-height: 1.04; letter-spacing: -0.045em; margin: 0; color: #fff; }
-.cinema h1 em { font-family: var(--font-serif); font-style: italic; font-weight: 400; color: var(--accent-soft); letter-spacing: -0.035em; }
 .cinema p { font-size: 17px; line-height: 1.75; color: #e1e1d5; margin: 26px 0 32px; max-width: 480px; }
 .cinema-actions { display: flex; flex-wrap: wrap; gap: 14px; }
 .cbtn { display: inline-flex; align-items: center; justify-content: space-between; gap: 26px; border-radius: 4px; padding: 17px 25px; min-height: 54px; font-family: var(--font-text); font-weight: 600; font-size: 14px; border: 1px solid transparent; transition: transform 0.25s, box-shadow 0.25s, background 0.25s; }
@@ -122,8 +117,7 @@ body.home { margin: 0; background: var(--paper); color: var(--ink); font-family:
   .site-header { height: 78px; gap: 16px; }
   .site-nav { display: none; }
   .home .nav-action { margin-left: auto; padding: 10px 14px; min-height: 0; font-size: 13px; white-space: nowrap; }
-  .wordmark b { font-size: 21px; }
-  .wordmark small { font-size: 8px; letter-spacing: 0.14em; white-space: nowrap; }
+  .wordmark { font-size: 16px; }
   .cinema { padding: 120px var(--gutter) 160px; min-height: 620px; }
   .cinema h1 { font-size: clamp(40px, 10vw, 60px); }
   .cinema h1 br { display: none; }
