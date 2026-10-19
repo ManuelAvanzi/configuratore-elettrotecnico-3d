@@ -41,7 +41,7 @@ for (const lesson of LESSONS) {
       else if (step.type === 'quiz') state.solved = !!step.options.find((o) => o.correct);
       else step.perform?.(ctx);
       await wait(350); // i pulsanti “premi e rilascia” completano dopo un attimo
-      for (let k = 0; k < 20; k++) sim.step(1 / 30);
+      for (let k = 0; k < 20 + Math.round((step.settle || 0) * 30); k++) sim.step(1 / 30); // `settle`: secondi di simulazione che il passo richiede
     }
     const done = stepDone(step, ctx, state);
     ok(done, `${i + 1}. ${step.title}`, step.type);

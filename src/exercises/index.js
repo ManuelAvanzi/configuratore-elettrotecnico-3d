@@ -4,7 +4,14 @@
 // l'impianto in isolamento (il circuito reale dello studente non viene modificato).
 import { blankProject } from '../core/project.js';
 import { build } from '../presets/builder.js';
-import { appartamento, motore, domotica } from '../presets/index.js';
+import { appartamento, motore, domotica, nave, naveVuota } from '../presets/index.js';
+
+/** Copia di un progetto senza i cavi che soddisfano `pred(wire, tagOf)` (impianti di partenza “da completare”) */
+function withoutWires(data, pred) {
+  const tagOf = (end) => data.components.find((c) => c.id === end.c)?.tag;
+  data.wires = data.wires.filter((w) => !pred(w, tagOf));
+  return data;
+}
 import { resolveParams } from '../catalog/defs/common.js';
 import { DEFS } from '../catalog/defs/index.js';
 
@@ -79,7 +86,11 @@ export function exerciseContext(app) {
     noted: (c) => filled(c.note, 10),
     /** lampada alimentata dal morsetto (tipo, morsetto) */
     lampFrom: (type, t) => comps('lamp').find((l) => p.wires.some((w) => (endIs(w.a, type, t) && w.b.c === l.id) || (endIs(w.b, type, t) && w.a.c === l.id))),
-    powered: () => !!sim.getInst('XA')?.state.on,
+    powered: () => !!sim.powerState?.().on,
+    /** gruppi elettrogeni del progetto; genOn: in moto e chiuso sulla sbarra; bus: stato della sua sbarra */
+    gens: () => comps('genset'),
+    genOn: (g) => !!(sim.getInst(g.id)?.state.running && sim.getInst(g.id)?.state.closed),
+    bus: (g) => sim.busAt?.(g.id, 'L1') || null,
     lit: (id) => (sim.getInst(id)?.view.bright || 0) > 0.5,
     anyLit: () => comps('lamp').some((c) => (sim.getInst(c.id)?.view.bright || 0) > 0.5),
     state: (id) => sim.getInst(id)?.state || {},
@@ -629,6 +640,303 @@ export const EXERCISES = [
       'Quale verifica o misura ti ha fatto cambiare una scelta durante il lavoro?',
       'Che cosa cambieresti se la potenza contrattuale raddoppiasse? E se il sistema fosse TN-S invece di TT?',
     ],
+  },
+
+  // ── Esercitazioni di bordo (modulo nautico) ────────────────────────────────────────
+  {
+    id: 'bordo-base',
+    track: 'base',
+    tema: 'nave',
+    view: 'panoramica',
+    title: 'Il primo impianto di bordo: un gruppo e due utenze',
+    level: 'Intermedio',
+    phase: 2,
+    icon: 'waves',
+    color: '#1d6fa8',
+    duration: '1 ora',
+    summary: 'Dal gruppo elettrogeno alla sbarra: arrivo, controllo dell’isolamento, una partenza luci e una pompa a 440 V 60 Hz.',
+    goals: ['Capire che a bordo l’energia la produce un generatore, non il distributore', 'Collegare un gruppo trifase al quadro e “mettere a terra” lo scafo', 'Riconoscere il sistema IT e il controllo dell’isolamento'],
+    start: naveVuota,
+    solution: () => build({ sys: '3F', source: 'none', title: 'Il primo impianto di bordo — soluzione' }, (b) => {
+      b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true });
+      b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 });
+      b.add('KI1', 'imd', 'R1:8', { soglia: 50 });
+      b.add('Q4', 'mcb1pn', 'R2:0', { In: 10 });
+      b.add('Q3', 'mcb3p', 'R2:3', { In: 32, curve: 'C', pdi: 6 });
+      b.add('E1', 'lamp', 'B3', { lt: 'led15' });
+      b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 });
+      b.wire('G1:L1', 'Q1:1', 25);
+      b.wire('G1:L2', 'Q1:3', 25);
+      b.wire('G1:L3', 'Q1:5', 25);
+      b.wire('G1:N', 'Q1:N1', 25);
+      b.wire('G1:PE', 'PE:PE1', 16);
+      b.wire('Q1:2', 'Q3:1', 25);
+      b.wire('Q1:4', 'Q3:3', 25);
+      b.wire('Q1:6', 'Q3:5', 25);
+      b.wire('Q3:1', 'Q4:1', 25);
+      b.wire('Q1:N2', 'Q4:N1', 25);
+      b.wire('Q4:2', 'E1:L', 1.5, 'grey');
+      b.wire('Q4:N2', 'E1:N', 1.5);
+      b.wire('Q4:2', 'KI1:L', 1.5);
+      b.wire('Q4:N2', 'KI1:N', 1.5);
+      b.wire('KI1:PE', 'PE:PE2', 1.5);
+      b.wire('Q3:2', 'M1:U1', 6);
+      b.wire('Q3:4', 'M1:V1', 6);
+      b.wire('Q3:6', 'M1:W1', 6);
+      b.wire('M1:PE', 'PE:PE3', 6);
+    }),
+    steps: [
+      { text: 'Monta un magnetotermico 3P+N da 80 A come arrivo del gruppo e collegalo a G1 con cavi da 25 mm²: L1 → 1, L2 → 3, L3 → 5, N → N1.', hint: 'Il gruppo da 50 kVA ha una corrente nominale di 66 A: l’interruttore e i cavi devono reggerla.', done: (c) => c.has('mcb4p', (p) => p.In >= 80) && c.wired('genset', 'L1', 'mcb4p', '1') && c.wired('genset', 'L2', 'mcb4p', '3') && c.wired('genset', 'L3', 'mcb4p', '5') && c.wired('genset', 'N', 'mcb4p', 'N1') },
+      { text: 'Collega il PE del gruppo al collettore di terra: a bordo la “terra” è lo scafo.', done: (c) => c.wired('genset', 'PE', 'pebar') },
+      { text: 'Il neutro è isolato (sistema IT): monta il dispositivo di controllo dell’isolamento, alimentalo tra fase e neutro a valle dell’arrivo e collega il suo PE al collettore.', hint: 'Famiglia “Segnalazione e misura”. Senza controllo dell’isolamento un primo guasto a terra passerebbe inosservato.', done: (c) => c.has('imd') && c.termWired('imd', 'L') && c.termWired('imd', 'N') && c.wired('imd', 'PE', 'pebar') },
+      { text: 'Monta una partenza luci (magnetotermico 1P+N da 10 A) alimentata dall’arrivo (2 → 1, N2 → N1) e una lampada a LED.', done: (c) => c.has('mcb1pn') && c.termWired('mcb1pn', '1') && c.termWired('mcb1pn', 'N1') && !!c.lampFrom('mcb1pn', '2') },
+      { text: 'Monta una partenza trifase (magnetotermico 3P da 32 A, curva C) e una pompa: motore da 7,5 kW collegato a stella, con il PE.', hint: 'A 440 V un motore da 7,5 kW assorbe circa 13 A e allo spunto circa 80 A.', done: (c) => c.has('mcb3p') && c.has('m3', (p) => p.P <= 7.5 && p.conn === 'Y') && c.termWired('m3', 'U1') && c.termWired('m3', 'V1') && c.termWired('m3', 'W1') && c.termWired('m3', 'PE') },
+      { live: true, text: 'Avvia il gruppo e chiudi l’interruttore di macchina (pannello Proprietà di G1 oppure il pulsante “Avvia la centrale” in basso).', done: (c) => c.gens().some((g) => c.genOn(g)) },
+      { live: true, text: 'Leggi tensione (440 V) e frequenza (60 Hz) nelle Proprietà del gruppo; chiudi la partenza della pompa e osserva la caduta di tensione allo spunto.', done: (c) => c.powered() && c.comps('m3').some((m) => c.state(m.id).mode === 'run') },
+    ],
+    tests: [
+      {
+        label: 'Con il gruppo in servizio la lampada si accende a circa 254 V',
+        run: (c) => {
+          const e = c.first('lamp');
+          if (!e) return false;
+          // si aspetta che la pompa finisca lo spunto: durante l’avviamento la sbarra scende sotto i 220 V
+          const [v] = c.scenario([{ power: true }, { wait: 3 }, { check: (s) => lampBright(s, e.id) > 0.5 && s.measureV({ c: e.id, t: 'L' }, { c: e.id, t: 'N' }) > 240 }]);
+          return v;
+        },
+      },
+      {
+        label: 'La pompa si avvia e gira in senso diretto',
+        run: (c) => {
+          const m = c.first('m3');
+          if (!m) return false;
+          const [r] = c.scenario([{ power: true }, { wait: 2 }, { check: (s) => s.getInst(m.id).state.mode === 'run' && s.getInst(m.id).state.dir === 1 }]);
+          return r;
+        },
+      },
+      { label: 'Sistema IT con controllo dell’isolamento', run: (c) => c.checkOk('it-imd') },
+      { label: 'Coordinamento cavi-interruttori senza errori', run: (c) => c.noErrors('coord-') && c.noErrors('pdi-') && c.noErrors('col-') },
+    ],
+    questions: ['Perché a bordo si preferisce il neutro isolato (sistema IT)?', 'Quanto vale la corrente di cortocircuito del gruppo rispetto alla sua corrente nominale? Perché è molto più bassa di quella della rete pubblica?', 'Che cosa succede alla tensione di sbarra quando la pompa parte? Con un gruppo più grande cambierebbe?'],
+  },
+
+  {
+    id: 'bordo-parallelo',
+    track: 'quadro',
+    tema: 'nave',
+    view: 'panoramica',
+    title: 'Due gruppi in parallelo e riserva n−1',
+    level: 'Avanzato',
+    phase: 2,
+    icon: 'waves',
+    color: '#0f8a8a',
+    duration: '2 ore',
+    summary: 'Secondo gruppo, sincronizzazione e parallelo sulla sbarra, ripartizione del carico, distacco dei carichi non essenziali e avaria di un gruppo.',
+    goals: ['Mettere in parallelo due generatori: tensione, frequenza e fase uguali', 'Leggere la ripartizione del carico', 'Garantire la continuità con un gruppo in avaria (n−1) e il distacco dei carichi'],
+    start: () => build({ sys: '3F', source: 'none', title: 'Due gruppi in parallelo' }, (b) => {
+      b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo in servizio.');
+      b.add('G2', 'genset', 'A3', { Sn: 50, net: 'nave440', earth: 'IT', auto: true }, 'Secondo gruppo: da collegare.');
+      b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 });
+      b.add('Q2', 'mcb4p', 'R1:4', { In: 80, curve: 'C', pdi: 6 }, 'Arrivo del secondo gruppo: da collegare.');
+      b.add('KI1', 'imd', 'R1:8', { soglia: 50 });
+      b.add('Q3', 'mcb3p', 'R2:0', { In: 32, curve: 'C', pdi: 6 });
+      b.add('Q4', 'mcb1pn', 'R2:3', { In: 10 });
+      b.add('Q5', 'mcb1pn', 'R2:5', { In: 16 });
+      b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 }, 'Pompa.');
+      b.add('E1', 'lamp', 'B3', { lt: 'led15' }, 'Luci.');
+      b.add('XS1', 'xs', 'C1', { carico: 'oven', tipo: 'sch' }, 'Cucina: non essenziale.');
+      b.wire('G1:L1', 'Q1:1', 25);
+      b.wire('G1:L2', 'Q1:3', 25);
+      b.wire('G1:L3', 'Q1:5', 25);
+      b.wire('G1:N', 'Q1:N1', 25);
+      b.wire('G1:PE', 'PE:PE1', 16);
+      b.wire('Q1:2', 'Q3:1', 25);
+      b.wire('Q1:4', 'Q3:3', 25);
+      b.wire('Q1:6', 'Q3:5', 25);
+      b.wire('Q3:1', 'Q4:1', 25);
+      b.wire('Q3:3', 'Q5:1', 25);
+      b.wire('Q1:N2', 'Q4:N1', 25);
+      b.wire('Q4:N1', 'Q5:N1', 25);
+      b.wire('Q4:2', 'E1:L', 1.5, 'grey');
+      b.wire('Q4:N2', 'E1:N', 1.5);
+      b.wire('Q4:2', 'KI1:L', 1.5);
+      b.wire('Q4:N2', 'KI1:N', 1.5);
+      b.wire('KI1:PE', 'PE:PE3', 1.5);
+      b.wire('Q3:2', 'M1:U1', 6);
+      b.wire('Q3:4', 'M1:V1', 6);
+      b.wire('Q3:6', 'M1:W1', 6);
+      b.wire('M1:PE', 'PE:PE4', 6);
+      b.wire('Q5:2', 'XS1:L', 2.5);
+      b.wire('Q5:N2', 'XS1:N', 2.5);
+      b.wire('XS1:PE', 'PE:PE5', 2.5);
+    }),
+    solution: () => build({ sys: '3F', source: 'none', title: 'Due gruppi in parallelo — soluzione' }, (b) => {
+      b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true });
+      b.add('G2', 'genset', 'A3', { Sn: 50, net: 'nave440', earth: 'IT', auto: true });
+      b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 });
+      b.add('Q2', 'mcb4p', 'R1:4', { In: 80, curve: 'C', pdi: 6 });
+      b.add('KI1', 'imd', 'R1:8', { soglia: 50 });
+      b.add('KL1', 'kls', 'R1:11', { soglia: 90, ritardo: 1 });
+      b.add('Q3', 'mcb3p', 'R2:0', { In: 32, curve: 'C', pdi: 6 });
+      b.add('Q4', 'mcb1pn', 'R2:3', { In: 10 });
+      b.add('Q5', 'mcb1pn', 'R2:5', { In: 16 });
+      b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 });
+      b.add('E1', 'lamp', 'B3', { lt: 'led15' });
+      b.add('XS1', 'xs', 'C1', { carico: 'oven', tipo: 'sch' });
+      for (const [G, Q] of [['G1', 'Q1'], ['G2', 'Q2']]) {
+        b.wire(`${G}:L1`, `${Q}:1`, 25);
+        b.wire(`${G}:L2`, `${Q}:3`, 25);
+        b.wire(`${G}:L3`, `${Q}:5`, 25);
+        b.wire(`${G}:N`, `${Q}:N1`, 25);
+      }
+      b.wire('G1:PE', 'PE:PE1', 16);
+      b.wire('G2:PE', 'PE:PE2', 16);
+      b.wire('Q1:2', 'Q2:2', 25);
+      b.wire('Q1:4', 'Q2:4', 25);
+      b.wire('Q1:6', 'Q2:6', 25);
+      b.wire('Q1:N2', 'Q2:N2', 25);
+      b.wire('Q2:2', 'Q3:1', 25);
+      b.wire('Q2:4', 'Q3:3', 25);
+      b.wire('Q2:6', 'Q3:5', 25);
+      b.wire('Q3:1', 'Q4:1', 25);
+      b.wire('Q3:3', 'KL1:11', 25);
+      b.wire('KL1:12', 'Q5:1', 25);
+      b.wire('Q2:N2', 'Q4:N1', 25);
+      b.wire('Q4:N1', 'Q5:N1', 25);
+      b.wire('Q4:2', 'E1:L', 1.5, 'grey');
+      b.wire('Q4:N2', 'E1:N', 1.5);
+      b.wire('Q4:2', 'KI1:L', 1.5);
+      b.wire('Q4:N2', 'KI1:N', 1.5);
+      b.wire('KI1:L', 'KL1:L', 1.5);
+      b.wire('KI1:N', 'KL1:N', 1.5);
+      b.wire('KI1:PE', 'PE:PE3', 1.5);
+      b.wire('Q3:2', 'M1:U1', 6);
+      b.wire('Q3:4', 'M1:V1', 6);
+      b.wire('Q3:6', 'M1:W1', 6);
+      b.wire('M1:PE', 'PE:PE4', 6);
+      b.wire('Q5:2', 'XS1:L', 2.5);
+      b.wire('Q5:N2', 'XS1:N', 2.5);
+      b.wire('XS1:PE', 'PE:PE5', 2.5);
+    }),
+    steps: [
+      { text: 'Collega il secondo gruppo G2 al suo arrivo Q2 (L1 → 1, L2 → 3, L3 → 5, N → N1, cavi da 25 mm²) e il suo PE al collettore di terra.', done: (c) => c.gens().length >= 2 && c.gens().every((g) => ['L1', 'L2', 'L3', 'N', 'PE'].every((t) => c.p.wiresAt({ c: g.id, t }).length > 0)) },
+      { text: 'Realizza la sbarra: metti in parallelo le uscite dei due arrivi (2 ↔ 2, 4 ↔ 4, 6 ↔ 6, N2 ↔ N2) con cavi da 25 mm².', hint: 'Le uscite di Q1 e Q2 diventano gli stessi nodi: è la sbarra principale.', done: (c) => ['2', '4', '6', 'N2'].every((t) => c.wired('mcb4p', t, 'mcb4p', t)) },
+      { live: true, text: 'Avvia G1 e chiudi il suo interruttore; poi avvia G2: la sbarra è già in tensione e il sincronizzatore impiega qualche secondo a portarlo in sincronismo.', hint: 'Se chiudessi G2 fuori fase, la corrente di circolazione farebbe intervenire la sua protezione.', done: (c) => c.gens().some((g) => c.genOn(g)) && c.gens().some((g) => c.state(g.id).running && c.state(g.id).synced && !c.state(g.id).closed) || c.gens().filter((g) => c.genOn(g)).length >= 2 },
+      { live: true, text: 'Chiudi l’interruttore di G2: due gruppi in parallelo. Nelle Proprietà di ciascuno leggi la ripartizione del carico.', done: (c) => c.gens().some((g) => (c.bus(g)?.gens.length || 0) >= 2) },
+      { text: 'Monta il relè di distacco carichi (soglia 90 %), alimentalo a valle della partenza luci e porta la cucina a valle del suo contatto 11-12.', hint: 'Famiglia “Comando e automazione”. Il contatto 11-12 va in serie alla fase che alimenta la partenza della cucina.', done: (c) => c.has('kls') && c.termWired('kls', 'L') && c.termWired('kls', 'N') && c.termWired('kls', '11') && c.termWired('kls', '12') },
+      { live: true, text: 'Avaria: ferma G1 dal pannello Proprietà. G2 prende tutto il carico; se supera la soglia, il relè stacca la cucina. Poi riavvia G1 e rimettilo in parallelo.', done: (c) => c.seen('avaria', c.gens().some((g) => !c.state(g.id).running) && c.gens().some((g) => c.genOn(g))) },
+    ],
+    tests: [
+      {
+        label: 'I due gruppi si ripartiscono il carico in parti uguali',
+        run: (c) => {
+          const [g1, g2] = c.gens();
+          if (!g1 || !g2) return false;
+          const [r] = c.scenario([{ power: true }, { wait: 2.5 }, { check: (s) => { const a = s.getInst(g1.id).state; const b = s.getInst(g2.id).state; return a.closed && b.closed && a.P > 500 && Math.abs(a.P - b.P) / a.P < 0.1; } }]);
+          return r;
+        },
+      },
+      { label: 'Riserva n−1 verificata', run: (c) => c.checkOk('gen-n1') },
+      { label: 'Relè di distacco carichi presente e collegato', run: (c) => c.has('kls') && c.termWired('kls', '12') },
+      { label: 'Nessun errore di coordinamento', run: (c) => c.noErrors('coord-') && c.noErrors('pdi-') },
+    ],
+    questions: ['Che cosa deve coincidere prima di chiudere un gruppo su una sbarra in tensione? Che cosa succede se non coincide?', 'Perché due gruppi uguali si dividono il carico a metà? E se uno fosse da 100 kVA?', 'Con un gruppo in avaria, quali utenze staccheresti per prime?'],
+  },
+
+  {
+    id: 'bordo-emergenza',
+    track: 'domotica',
+    tema: 'nave',
+    view: 'panoramica',
+    title: 'Black-out e porto: UPS, gruppo di emergenza, ATS e presa di banchina',
+    level: 'Avanzato',
+    phase: 2,
+    icon: 'waves',
+    color: '#c24a00',
+    duration: '2 ore',
+    summary: 'Automazione di bordo: alimentazione di emergenza entro 45 s (UPS, gruppo di emergenza, commutatore automatico) e collegamento alla banchina in porto.',
+    goals: ['Distinguere utenze essenziali e non essenziali', 'Capire la sequenza del black-out: batteria, gruppo di emergenza, commutazione', 'Collegare la nave alla banchina rispettando interblocchi e sequenza delle fasi'],
+    start: () => withoutWires(nave(), (w, tag) => ['G3', 'XB1'].includes(tag(w.a)) || ['G3', 'XB1'].includes(tag(w.b)) || (tag(w.a) === 'U1' && ['2', 'N2'].includes(w.a.t)) || (tag(w.b) === 'U1' && ['2', 'N2'].includes(w.b.t))),
+    solution: nave,
+    steps: [
+      { text: 'Collega il gruppo di emergenza G3 al suo arrivo Q7 (L1 → 1, L2 → 3, L3 → 5, N → N1) con cavi da 10 mm² e il PE al collettore.', done: (c) => c.gens().filter((g) => c.par(g).emergenza).every((g) => ['L1', 'L2', 'L3', 'N', 'PE'].every((t) => c.p.wiresAt({ c: g.id, t }).length > 0)) && c.gens().some((g) => c.par(g).emergenza) },
+      { text: 'Collega l’uscita dell’UPS (2, N2) alla partenza luci Q4 (1, N1): le luci di navigazione restano accese anche nei secondi del black-out.', done: (c) => c.wired('ups', '2', 'mcb1pn', '1') && c.wired('ups', 'N2', 'mcb1pn', 'N1') },
+      { text: 'Collega la presa di banchina XB1 all’interruttore di banchina Q8 (L1 → 1, L2 → 3, L3 → 5, N → N1, cavi da 25 mm²) e il PE al collettore.', done: (c) => c.comps('shore').length > 0 && c.comps('shore').every((x) => ['L1', 'L2', 'L3', 'N', 'PE'].every((t) => c.p.wiresAt({ c: x.id, t }).length > 0)) },
+      { live: true, text: 'Avvia la centrale e controlla nelle Proprietà: il commutatore KC1 è sulla rete normale e l’UPS è alimentato dalla rete.', done: (c) => c.powered() && c.comps('ats').some((a) => c.state(a.id).src === 'normal') && c.comps('ups').some((u) => c.state(u.id).mode === 'rete') },
+      { live: true, text: 'Simula il black-out: ferma G1 e G2 dalle loro Proprietà. Osserva in sequenza: luci dalla batteria, avviamento automatico di G3, commutazione dell’ATS, timoneria di nuovo in marcia.', done: (c) => c.seen('blackout', c.comps('ats').some((a) => c.state(a.id).src === 'emerg') && c.gens().some((g) => c.par(g).emergenza && c.genOn(g))) },
+      { live: true, text: 'In porto: ferma tutti i gruppi, collega il cavo della presa di banchina e chiudi il suo interruttore (trasferimento a black-out: prima si aprono i gruppi).', done: (c) => c.comps('shore').some((x) => c.state(x.id).closed) },
+    ],
+    tests: [
+      {
+        label: 'Al black-out le luci restano accese e l’alimentazione di emergenza arriva entro 45 s',
+        run: (c) => {
+          const gens = c.gens().filter((g) => !c.par(g).emergenza);
+          const e = c.first('lamp');
+          const ats = c.first('ats');
+          if (gens.length < 1 || !e || !ats) return false;
+          const steps = [{ power: true }, { wait: 3 }];
+          for (const g of gens) steps.push({ act: [g.id, 'genStop'] });
+          steps.push({ wait: 0.3 }, { check: (s) => lampBright(s, e.id) > 0.5 }, { wait: 7 }, { check: (s) => s.getInst(ats.id).state.src === 'emerg' && lampBright(s, e.id) > 0.5 });
+          const r = c.scenario(steps);
+          return r[0] && r[1];
+        },
+      },
+      {
+        label: 'In porto la banchina alimenta la nave con i gruppi fermi',
+        run: (c) => {
+          const sh = c.first('shore');
+          const e = c.first('lamp');
+          if (!sh || !e) return false;
+          const [r] = c.scenario([{ power: false }, { act: [sh.id, 'plug'] }, { act: [sh.id, 'close'] }, { wait: 1.5 }, { check: (s) => s.getInst(sh.id).state.closed && lampBright(s, e.id) > 0.5 }]);
+          return r;
+        },
+      },
+      { label: 'Utenze essenziali alimentate tramite ATS o UPS', run: (c) => c.comps('lamp').concat(c.comps('m3')).filter((x) => c.par(x).essenziale).every((x) => c.checkOk('reg-ess-' + x.id)) },
+      { label: 'Controllo della sequenza delle fasi attivo sulla banchina', run: (c) => c.checkOk('reg-shore-') },
+    ],
+    questions: ['Perché il gruppo di emergenza sta su un ponte alto, sopra la linea di galleggiamento?', 'A che cosa serve l’UPS se c’è già il gruppo di emergenza?', 'Che cosa succederebbe chiudendo la banchina con la sequenza delle fasi inversa? E perché l’interblocco impedisce di chiuderla con i gruppi in servizio?'],
+  },
+
+  {
+    id: 'bordo-parametri',
+    track: 'parametri',
+    tema: 'nave',
+    view: 'panoramica',
+    title: 'Neutro isolato e cortocircuito dei generatori',
+    level: 'Avanzato',
+    phase: 3,
+    icon: 'waves',
+    color: '#5a3fd0',
+    duration: '1 ora',
+    summary: 'Con il docente: primo e secondo guasto a terra nel sistema IT, corrente di cortocircuito con uno o due gruppi, spunto dei motori su una rete in isola, scelta degli interruttori secondo i registri.',
+    goals: ['Spiegare perché il primo guasto a terra in IT non è pericoloso', 'Legare la corrente di cortocircuito al numero di generatori in servizio', 'Scegliere Icu e Icm come richiedono i registri navali'],
+    start: nave,
+    solution: null,
+    teacher: true,
+    steps: [
+      { live: true, text: 'Attiva la modalità docente, avvia la centrale e inserisci un “guasto franco a massa” sulla presa della cucina XS1: il controllo dell’isolamento KI1 va in allarme ma nessuna protezione interviene.', done: (c) => c.seen('g1', c.powered() && c.comps('imd').some((k) => c.state(k.id).alarm) && !c.p.components.some((x) => c.state(x.id).tripped)) },
+      { live: true, text: 'Con il guasto presente attiva “una persona tocca l’involucro”: leggi la corrente nel corpo nelle Proprietà della presa (meno di 1 mA).', done: (c) => c.seen('g2', c.comps('xs').some((x) => c.par(x).persona && c.par(x).guasto === 'franco')) },
+      { live: true, text: 'Togli il guasto e la persona. Ferma G2: con un solo gruppo la corrente di cortocircuito presunta si dimezza. Leggila nelle Proprietà di G1 (circa 435 A, 6,6 volte la corrente nominale).', done: (c) => c.seen('g3', c.gens().filter((g) => c.genOn(g)).length === 1 && c.gens().filter((g) => !c.par(g).emergenza).some((g) => !c.state(g.id).running)) },
+      { live: true, text: 'Con un solo gruppo in servizio avvia l’elica di manovra (chiudi Q3): osserva la caduta di tensione allo spunto nelle Proprietà di G1. Poi rimetti G2 in parallelo e riprova.', done: (c) => c.seen('g4', c.comps('m3').some((m) => c.state(m.id).mode === 'start')) },
+      { text: 'Apri la scheda Verifiche, gruppo “Impianto di bordo”: per ogni interruttore leggi Icu ≥ Iac e Icm ≥ Ip. Perché i registri non ammettono la protezione di back-up?', done: (c) => c.checkOk('reg-pdi-') },
+      { text: 'Annota la motivazione (pannello Proprietà) su G1, KI1 e su un interruttore: valore scelto e perché.', done: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
+    ],
+    tests: [
+      {
+        label: 'Primo guasto a terra: allarme isolamento, nessun intervento',
+        run: (c) => {
+          const xs = c.first('xs');
+          const ki = c.first('imd');
+          if (!xs || !ki) return false;
+          const [r] = c.scenario([{ power: true }, { params: [xs.id, { guasto: 'franco' }] }, { wait: 0.3 }, { check: (s) => s.getInst(ki.id).state.alarm && ![...s.inst.values()].some((i) => i.state.tripped) }]);
+          return r;
+        },
+      },
+      { label: 'Icu ≥ Iac e Icm ≥ Ip su tutti gli interruttori', run: (c) => c.checkOk('reg-pdi-') && !c.checkErr('reg-pdi-') },
+      { label: 'Controllo dell’isolamento presente', run: (c) => c.checkOk('it-imd') },
+      { label: 'Almeno tre motivazioni scritte', run: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
+    ],
+    questions: ['Perché il differenziale non interviene al primo guasto in un sistema IT, e perché il secondo guasto è un cortocircuito?', 'Perché la corrente di cortocircuito di un generatore è solo 5–8 volte la nominale, mentre dalla rete pubblica può essere di decine di kA?', 'Che cosa cambia nella scelta di un interruttore tra Icu e Ics? Quando i registri chiedono la Ics?'],
   },
 ];
 

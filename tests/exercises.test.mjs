@@ -25,10 +25,7 @@ function fakeApp(data, { teacher = true, wireMode = 'flow', powered = true } = {
   };
   project.on('change', resync);
   resync();
-  if (powered) {
-    sim.getInst('XA').state.on = true;
-    sim.settle();
-  }
+  if (powered) sim.setPower(true);
   const app = {
     project,
     sim,

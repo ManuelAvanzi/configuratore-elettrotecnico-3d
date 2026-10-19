@@ -17,13 +17,19 @@ e, dal browser del visore (Meta Quest), in **realtà virtuale** con il pulsante 
 
 ### Il tutorial guidato
 
-Cinque lezioni brevi (10–15 minuti), ognuna su un'operazione semplice:
+Otto lezioni brevi (10–15 minuti), ognuna su un'operazione semplice; le ultime tre si svolgono a bordo di una nave:
 
 1. **La tua prima lampada** — fase e neutro, magnetotermico, interruttore e lampada (si parte da zero).
 2. **Il differenziale ti protegge** — conduttore di terra, tasto di prova, guasto simulato su una lavatrice.
 3. **Una luce da due punti** — deviatori e navette.
 4. **Avvia un motore con un pulsante** — contattore, pulsantiera, autoritenuta.
 5. **Misura con il multimetro** — tensione con i puntali, corrente con la pinza, legame tra potenza e corrente.
+6. **Avvia la centrale di bordo** — gruppo elettrogeno a 440 V 60 Hz, PE allo scafo e neutro isolato, avviamento
+   e chiusura dell'interruttore di macchina.
+7. **Due gruppi in parallelo** — sincronizzazione (ampiezza, frequenza, fase), parallelo, ripartizione del
+   carico, avaria di un gruppo.
+8. **Black-out!** — utenze essenziali, UPS a batteria, avviamento automatico del gruppo di emergenza,
+   commutatore ATS e rientro della rete normale.
 
 Ogni passo è di un tipo: *spiegazione* (si legge e si preme Avanti), *collegamento* (due morsetti evidenziati con i
 cerchi 1 e 2 e una freccia), *prova tu* (azionare una leva, un pulsante, dare corrente), *misura* e *domanda* (a
@@ -67,6 +73,13 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   5. *Presentazione dello studente della configurazione adottata* — percorso sull'impianto attuale: dati del
      progetto, motivazione di ogni protezione, quattro domande di giustificazione, verifiche, presentazione e
      scheda tecnica.
+
+  Le **esercitazioni di bordo** (etichetta “a bordo” nell'elenco) coprono gli stessi percorsi con l'impianto
+  nautico: *Il primo impianto di bordo* (percorso 1: gruppo, PE allo scafo, controllo isolamento, luci e pompa),
+  *Due gruppi in parallelo e riserva n−1* (percorso 2: sbarra, sincronizzazione, distacco carichi, avaria),
+  *Black-out e porto* (percorso 3: UPS, gruppo di emergenza, ATS, presa di banchina) e *Neutro isolato e
+  cortocircuito dei generatori* (percorso 4, con il docente: primo guasto a terra in IT, Icc con uno o due
+  gruppi, spunto in isola, Icu/Icm da registro). La presentazione (percorso 5) vale anche per l'impianto di bordo.
 - **Modalità docente**: inserimento di guasti (dispersioni, massa franca, persona a contatto, cavo interrotto,
   morsetto allentato) e caricamento delle soluzioni.
 - **Giustificazione delle scelte** (pannello Progetto): quattro domande — fornitura e potenza, protezioni,
@@ -97,6 +110,11 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   normale / rete di emergenza) e **UPS** monofase con batteria per luci e strumenti; utenze marcate **essenziali**;
   verifiche “Impianto di bordo (registri navali)”: Icu ≥ Iac e Icm ≥ Ip senza back-up, utenze essenziali
   alimentate tramite ATS/UPS, presenza di una sorgente di emergenza, controllo di sequenza sulla banchina.
+- **Impianti di bordo, fase A3**: quattro **esercitazioni di bordo** nei percorsi della scheda (vedi sopra), tre
+  **lezioni del tutorial** a bordo (6, 7, 8) e due modelli predefiniti in più: “Quadro di bordo da configurare”
+  (`?modello=nave-vuoto`) e “Traghetto: quadro a due semisbarre” (`?modello=traghetto`). Le isole di rete
+  (sbarre) seguono ora solo conduttori, contatti chiusi e avvolgimenti: due semisbarre con il congiuntore aperto,
+  o la sbarra di emergenza dietro l'ATS, sono isole distinte anche se condividono il PE.
   La proposta completa dei moduli nautico e media tensione è in
   [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
 
@@ -125,7 +143,7 @@ Poi apri <http://localhost:5190> (homepage).
 | `npm run build` | versione da pubblicare nella cartella `dist/` (sito statico con le tre pagine) |
 | `npm run preview` | prova locale della versione `dist/` |
 | `npm run pubblica` | pubblica il sito su GitHub Pages (ramo `gh-pages`) |
-| `npm test` | tutti i collaudi: simulatore e verifiche (69 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) + modulo nautico (96 prove) |
+| `npm test` | tutti i collaudi: simulatore e verifiche (73 prove) + lezioni del tutorial (105 prove) + esercitazioni (60 prove) + modulo nautico (113 prove) |
 
 ### Provarlo sul visore (Meta Quest)
 
@@ -170,6 +188,12 @@ un Meta Quest 3 simulato (libreria IWER di Meta) permette di mostrare alla class
   principali (non quello di emergenza, che parte solo al black-out); dal pannello Proprietà di ogni gruppo si
   fanno le singole manovre (avvia, sincronizza, chiudi, apri, ripristina) e dalla presa di banchina si collega il
   cavo e si chiude l'interruttore. Prova del black-out: ferma i due gruppi e guarda UPS, gruppo di emergenza e ATS.
+- `?modello=nave-vuoto` — quadro di bordo da configurare: solo il gruppo G1 (50 kVA, 440 V 60 Hz, neutro isolato)
+  e il collettore di terra; è il punto di partenza dell'esercitazione “Il primo impianto di bordo”.
+- `?modello=traghetto` — quadro principale a due semisbarre: due gruppi da 100 kVA, congiuntore QC, pompe di
+  sentina e antincendio da 15 kW, ventilazione del garage, cucina, aria condizionata e luci. Con il congiuntore
+  aperto ogni gruppo alimenta la sua metà; chiudendolo i gruppi lavorano in parallelo e un gruppo regge tutta la
+  nave (circa il 45 % del carico).
 - Il progetto in corso viene salvato automaticamente nel browser; *Salva* / *Apri* usano file `.impianto.json`.
 
 ---
@@ -205,7 +229,7 @@ public/img/      immagini della homepage e copertine delle lezioni (ricavate dal
 tests/           collaudo in Node: simulatore (sim.test.mjs), lezioni del tutorial (lessons.test.mjs),
                  esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove),
                  modulo nautico (nautico.test.mjs: sistema 440 V, IT, gruppi, parallelo, isola, distacco carichi,
-                 banchina, black-out con UPS/emergenza/ATS, verifiche da registro)
+                 banchina, black-out con UPS/emergenza/ATS, verifiche da registro, modelli di bordo aggiuntivi)
 ```
 
 La parte elettrica (`src/sim`, `src/catalog/defs`, `src/core`) non dipende da Three.js: si collauda in Node e si può

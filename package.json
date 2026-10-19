@@ -1,7 +1,7 @@
 {
   "name": "configuratore-elettrotecnico-3d",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Dispositivi elettrotecnici: configuratore 3D — laboratorio immersivo web + WebXR (CarraroLab / ITS)",
   "type": "module",
   "scripts": {

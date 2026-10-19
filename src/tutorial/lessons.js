@@ -5,6 +5,7 @@
 //   enter(ctx) (all'ingresso), buttons [{label, icon, run(ctx)}], options (quiz), schema (disegno).
 // Le funzioni ricevono un contesto `ctx` con progetto e simulatore (vedi makeContext).
 import { build } from '../presets/builder.js';
+import { nave } from '../presets/index.js';
 
 // ── Disegni semplici per le spiegazioni ─────────────────────────────────────────────
 const COL = { L: '#8a4b26', N: '#1f64c8', PE: '#2f9a3a', box: '#ff5900', ink: '#1d2127' };
@@ -144,6 +145,69 @@ function startMotore() {
     b.wire('KM1:14', 'H1:X1', 1, 'red');
     b.wire('H1:X2', 'Q2:N2', 1, 'blue');
   });
+}
+
+function startCentraleBordo() {
+  return build({ sys: '3F', source: 'none', title: 'Tutorial · Avvia la centrale di bordo' }, (b) => {
+    b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo diesel-generatore.');
+    b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 }, 'Arrivo del gruppo.');
+    b.add('KI1', 'imd', 'R1:8', { soglia: 50 }, 'Controllo dell’isolamento (sistema IT).');
+    b.add('Q4', 'mcb1pn', 'R2:0', { In: 10 }, 'Partenza luci.');
+    b.add('E1', 'lamp', 'B3', { lt: 'led15' });
+    b.wire('G1:L2', 'Q1:3', 25);
+    b.wire('G1:L3', 'Q1:5', 25);
+    b.wire('Q1:N2', 'Q4:N1', 25);
+    b.wire('Q4:N2', 'E1:N', 1.5);
+    b.wire('Q4:2', 'KI1:L', 1.5);
+    b.wire('Q4:N2', 'KI1:N', 1.5);
+    b.wire('KI1:PE', 'PE:PE2', 1.5);
+  });
+}
+
+function startParalleloBordo() {
+  return build({ sys: '3F', source: 'none', title: 'Tutorial · Due gruppi in parallelo' }, (b) => {
+    b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: false });
+    b.add('G2', 'genset', 'A3', { Sn: 50, net: 'nave440', earth: 'IT', auto: false });
+    b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 });
+    b.add('Q2', 'mcb4p', 'R1:4', { In: 80, curve: 'C', pdi: 6 });
+    b.add('KI1', 'imd', 'R1:8', { soglia: 50 });
+    b.add('Q3', 'mcb3p', 'R2:0', { In: 32, curve: 'C', pdi: 6 });
+    b.add('Q4', 'mcb1pn', 'R2:3', { In: 10 });
+    b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 }, 'Pompa.');
+    b.add('E1', 'lamp', 'B3', { lt: 'led15' });
+    for (const [G, Q] of [['G1', 'Q1'], ['G2', 'Q2']]) {
+      b.wire(`${G}:L1`, `${Q}:1`, 25);
+      b.wire(`${G}:L2`, `${Q}:3`, 25);
+      b.wire(`${G}:L3`, `${Q}:5`, 25);
+      b.wire(`${G}:N`, `${Q}:N1`, 25);
+    }
+    b.wire('G1:PE', 'PE:PE1', 16);
+    b.wire('G2:PE', 'PE:PE2', 16);
+    b.wire('Q1:2', 'Q2:2', 25);
+    b.wire('Q1:4', 'Q2:4', 25);
+    b.wire('Q1:6', 'Q2:6', 25);
+    b.wire('Q1:N2', 'Q2:N2', 25);
+    b.wire('Q2:2', 'Q3:1', 25);
+    b.wire('Q2:4', 'Q3:3', 25);
+    b.wire('Q2:6', 'Q3:5', 25);
+    b.wire('Q3:1', 'Q4:1', 25);
+    b.wire('Q2:N2', 'Q4:N1', 25);
+    b.wire('Q4:2', 'E1:L', 1.5, 'grey');
+    b.wire('Q4:N2', 'E1:N', 1.5);
+    b.wire('Q4:2', 'KI1:L', 1.5);
+    b.wire('Q4:N2', 'KI1:N', 1.5);
+    b.wire('KI1:PE', 'PE:PE3', 1.5);
+    b.wire('Q3:2', 'M1:U1', 6);
+    b.wire('Q3:4', 'M1:V1', 6);
+    b.wire('Q3:6', 'M1:W1', 6);
+    b.wire('M1:PE', 'PE:PE4', 6);
+  });
+}
+
+function startBlackoutBordo() {
+  const d = nave();
+  d.meta.title = 'Tutorial · Black-out!';
+  return d;
 }
 
 // ── Passi riusabili ─────────────────────────────────────────────────────────────────
@@ -699,6 +763,341 @@ export const LESSONS = [
       },
     ],
   },
+
+  // ── Lezioni di bordo (modulo nautico) ───────────────────────────────────────────────
+  {
+    id: 'centrale-bordo',
+    n: 6,
+    title: 'Avvia la centrale di bordo',
+    subtitle: 'A bordo l’energia la produce un gruppo elettrogeno: collegalo al quadro e accendi la prima luce',
+    duration: '10 minuti',
+    level: 'Intermedio',
+    icon: 'waves',
+    color: '#1d6fa8',
+    cover: 'img/lezione-centrale-bordo.jpg',
+    goals: ['Capire che cosa c’è a bordo al posto del contatore', 'Collegare un gruppo trifase al quadro', 'Avviare un gruppo e chiudere il suo interruttore'],
+    start: startCentraleBordo,
+    steps: [
+      {
+        type: 'info',
+        title: 'Benvenuto a bordo!',
+        text: 'Siamo nella sala quadri di uno yacht. Qui non c’è il contatore del distributore: l’energia la produce il gruppo elettrogeno G1, un motore diesel che fa girare un alternatore. Il quadro è lo stesso di sempre: guide DIN, interruttori, cavi.',
+        todo: 'Premi Avanti.',
+        view: 'panoramica',
+        focus: ['G1', 'cabinet'],
+      },
+      {
+        type: 'info',
+        title: 'Il gruppo elettrogeno',
+        text: 'G1 produce corrente trifase a 440 volt e 60 hertz: tre fasi L1, L2, L3, il neutro N e il PE. Due fasi sono già collegate all’interruttore di arrivo Q1; mancano la fase L1, il neutro e il PE.',
+        why: 'Sulle navi si usano spesso 440 V e 60 Hz, lo standard americano: cavi più piccoli e motori più compatti. Con 50 kVA il gruppo dà 66 ampere per fase.',
+        focus: ['G1', 'Q1'],
+      },
+      {
+        type: 'wire',
+        title: 'Collega la fase L1',
+        text: 'Portiamo la terza fase dal gruppo all’interruttore di arrivo.',
+        todo: 'Clicca il morsetto L1 del gruppo G1, poi il morsetto 1 in alto di Q1.',
+        from: 'G1:L1',
+        to: 'Q1:1',
+      },
+      {
+        type: 'wire',
+        title: 'Collega il neutro',
+        text: 'Il neutro del gruppo arriva al polo N dell’interruttore.',
+        todo: 'Clicca il morsetto N del gruppo, poi il morsetto N in alto di Q1.',
+        from: 'G1:N',
+        to: 'Q1:N1',
+      },
+      {
+        type: 'wire',
+        title: 'La terra è lo scafo',
+        text: 'A bordo non c’è un dispersore nel terreno: il conduttore di protezione è collegato allo scafo metallico. Il PE del gruppo va al collettore di terra del quadro.',
+        todo: 'Clicca il morsetto PE del gruppo, poi un morsetto libero del collettore di terra.',
+        why: 'Il neutro invece NON è collegato allo scafo: è il sistema IT, a neutro isolato. Il dispositivo KI1 controlla in continuo l’isolamento e dà allarme al primo guasto.',
+        from: 'G1:PE',
+        to: 'PE:PE1',
+      },
+      {
+        type: 'wire',
+        title: 'Dall’arrivo alla partenza luci',
+        text: 'Dall’uscita di Q1 la fase va alla partenza luci Q4.',
+        todo: 'Clicca il morsetto 2 di Q1, poi il morsetto 1 di Q4.',
+        from: 'Q1:2',
+        to: 'Q4:1',
+      },
+      {
+        type: 'wire',
+        title: 'Dalla partenza alla lampada',
+        text: 'Il neutro è già collegato: manca la fase verso la lampada.',
+        todo: 'Clicca il morsetto 2 di Q4, poi il morsetto L della lampada E1.',
+        from: 'Q4:2',
+        to: 'E1:L',
+      },
+      {
+        type: 'action',
+        title: 'Avvia il gruppo',
+        text: 'Il motore diesel parte e l’alternatore si porta in tensione. L’interruttore di macchina però è ancora aperto: la sbarra non ha tensione.',
+        todo: 'Clicca il gruppo G1 (oppure usa “Avvia il gruppo” nelle sue Proprietà).',
+        focus: ['G1'],
+        target: { tag: 'G1', action: 'genStart' },
+        done: (c) => !!c.st('G1').running,
+        perform: (c) => c.act('G1', 'genStart'),
+      },
+      {
+        type: 'action',
+        title: 'Chiudi l’interruttore di macchina',
+        text: 'Ora il gruppo alimenta la sbarra: la lampada si accende.',
+        todo: 'Clicca di nuovo il gruppo G1 (oppure “Chiudi sulla sbarra” nelle Proprietà).',
+        why: 'La sbarra era senza tensione, quindi non serviva sincronizzare: il gruppo fa da riferimento. Con un secondo gruppo sarà diverso.',
+        focus: ['G1', 'E1'],
+        target: { tag: 'G1', action: 'close' },
+        done: (c) => !!c.st('G1').closed && c.lit('E1'),
+        perform: (c) => c.act('G1', 'close'),
+      },
+      {
+        type: 'quiz',
+        title: 'Perché la lampada riceve 254 volt e non 230?',
+        text: 'Guarda la tensione nelle Proprietà del gruppo o della lampada.',
+        focus: ['G1', 'E1'],
+        options: [
+          { text: 'Perché la rete di bordo è a 440 V tra le fasi: tra fase e neutro ci sono 440 ÷ √3 ≈ 254 V', correct: true, feedback: 'Esatto: la tensione di fase è sempre quella concatenata divisa per radice di tre.' },
+          { text: 'Perché il gruppo è nuovo', feedback: 'No: dipende dalla tensione nominale della rete di bordo, 440 V.' },
+          { text: 'Perché la lampada è a LED', feedback: 'No: la tensione la decide il generatore, non la lampada.' },
+        ],
+      },
+      {
+        type: 'end',
+        title: 'La centrale di bordo è in servizio!',
+        text: 'Hai collegato un gruppo elettrogeno e alimentato la prima utenza di bordo.',
+        recap: ['A bordo l’energia la producono i gruppi elettrogeni: 440 V, 60 Hz.', 'Il PE va allo scafo; il neutro resta isolato (sistema IT) e un apparecchio controlla l’isolamento.', 'Prima si avvia il gruppo, poi si chiude il suo interruttore sulla sbarra.'],
+        view: 'panoramica',
+      },
+    ],
+  },
+
+  {
+    id: 'parallelo-bordo',
+    n: 7,
+    title: 'Due gruppi in parallelo',
+    subtitle: 'Sincronizzare un secondo gruppo sulla sbarra e dividersi il carico',
+    duration: '15 minuti',
+    level: 'Intermedio',
+    icon: 'waves',
+    color: '#0f8a8a',
+    cover: 'img/lezione-parallelo-bordo.jpg',
+    goals: ['Capire che cosa vuol dire “sincronizzare”', 'Mettere due generatori in parallelo', 'Vedere come si ripartiscono il carico'],
+    start: startParalleloBordo,
+    steps: [
+      {
+        type: 'info',
+        title: 'Due gruppi, una sbarra',
+        text: 'G1 e G2 sono collegati ciascuno al proprio interruttore di arrivo, e le uscite dei due arrivi sono unite: è la sbarra principale. Sulla sbarra ci sono le luci e una pompa.',
+        view: 'panoramica',
+        focus: ['G1', 'G2', 'Q1', 'Q2'],
+      },
+      {
+        type: 'action',
+        title: 'Avvia G1',
+        text: 'Partiamo dal primo gruppo.',
+        todo: 'Clicca il gruppo G1.',
+        focus: ['G1'],
+        target: { tag: 'G1', action: 'genStart' },
+        done: (c) => !!c.st('G1').running,
+        perform: (c) => c.act('G1', 'genStart'),
+      },
+      {
+        type: 'action',
+        title: 'Chiudi G1 sulla sbarra',
+        text: 'La sbarra era senza tensione: G1 chiude subito e alimenta luci e pompa.',
+        todo: 'Clicca di nuovo G1.',
+        focus: ['G1', 'E1'],
+        target: { tag: 'G1', action: 'close' },
+        done: (c) => !!c.st('G1').closed && c.lit('E1'),
+        perform: (c) => c.act('G1', 'close'),
+      },
+      {
+        type: 'action',
+        title: 'Avvia anche G2',
+        text: 'Ora la sbarra è in tensione. Il secondo gruppo parte, ma la sua tensione non è “in passo” con quella della sbarra.',
+        todo: 'Clicca il gruppo G2.',
+        focus: ['G2'],
+        target: { tag: 'G2', action: 'genStart' },
+        done: (c) => !!c.st('G2').running,
+        perform: (c) => c.act('G2', 'genStart'),
+      },
+      {
+        type: 'info',
+        title: 'Che cosa vuol dire sincronizzare',
+        text: 'Due generatori si possono unire solo se la loro tensione è uguale in ampiezza, frequenza e fase: le due onde devono salire e scendere insieme. Se chiudessi adesso, tra i due gruppi circolerebbe una corrente enorme e la protezione di G2 aprirebbe l’interruttore.',
+        why: 'Il sincronizzatore regola il diesel di G2 finché le onde coincidono, poi dà il consenso. In questa lezione lo facciamo a mano con il tasto “Sincronizza”.',
+        focus: ['G2'],
+      },
+      {
+        type: 'action',
+        title: 'Sincronizza G2',
+        text: 'Porta G2 in sincronismo con la sbarra.',
+        todo: 'Apri le Proprietà di G2 e premi “Sincronizza” (oppure clicca il gruppo).',
+        focus: ['G2'],
+        target: { tag: 'G2', action: 'sync' },
+        done: (c) => !!c.st('G2').synced,
+        perform: (c) => c.act('G2', 'sync'),
+      },
+      {
+        type: 'action',
+        title: 'Chiudi G2: parallelo',
+        text: 'Adesso la chiusura è sicura: i due gruppi lavorano insieme sulla stessa sbarra.',
+        todo: 'Chiudi l’interruttore di G2 (clicca il gruppo o “Chiudi sulla sbarra”).',
+        focus: ['G1', 'G2'],
+        target: { tag: 'G2', action: 'close' },
+        done: (c) => !!c.st('G2').closed && !c.st('G2').trip,
+        perform: (c) => c.act('G2', 'close'),
+      },
+      {
+        type: 'info',
+        title: 'Il carico si divide',
+        text: 'Nelle Proprietà di G1 e G2 la potenza attiva è la stessa: due gruppi uguali si dividono il carico a metà. Con gruppi di taglia diversa il carico si ripartisce in proporzione alla potenza.',
+        focus: ['G1', 'G2'],
+      },
+      {
+        type: 'quiz',
+        title: 'Perché serve sincronizzare prima di chiudere?',
+        options: [
+          { text: 'Perché le due tensioni devono avere la stessa ampiezza, frequenza e fase, altrimenti circola una corrente molto grande tra i gruppi', correct: true, feedback: 'Esatto: è come spingere un’altalena a tempo; fuori tempo si prende un colpo.' },
+          { text: 'Per scaldare il motore diesel', feedback: 'No: il riscaldamento non c’entra con la chiusura dell’interruttore.' },
+          { text: 'Per far girare più veloce la pompa', feedback: 'No: la velocità della pompa dipende dalla frequenza, che resta 60 Hz.' },
+        ],
+      },
+      {
+        type: 'action',
+        title: 'Avaria di G1',
+        text: 'Simuliamo un guasto: G1 si ferma. G2 prende tutto il carico da solo, senza interruzione per le utenze.',
+        todo: 'Ferma G1 (clicca il gruppo oppure “Ferma il gruppo” nelle Proprietà).',
+        focus: ['G1', 'G2', 'E1'],
+        target: { tag: 'G1', action: 'genStop' },
+        done: (c) => !c.st('G1').running && !!c.st('G2').closed && c.lit('E1'),
+        perform: (c) => c.act('G1', 'genStop'),
+      },
+      {
+        type: 'end',
+        title: 'Hai messo due gruppi in parallelo!',
+        text: 'È la manovra di base di ogni centrale di bordo.',
+        recap: ['Su una sbarra in tensione si chiude solo a sincronismo raggiunto: stessa ampiezza, frequenza e fase.', 'Gruppi uguali si dividono il carico a metà.', 'Con due gruppi, l’avaria di uno non spegne la nave (riserva n−1).'],
+        view: 'panoramica',
+      },
+    ],
+  },
+
+  {
+    id: 'blackout-bordo',
+    n: 8,
+    title: 'Black-out!',
+    subtitle: 'Quando si fermano i gruppi: batteria, gruppo di emergenza e commutatore automatico',
+    duration: '15 minuti',
+    level: 'Intermedio',
+    icon: 'waves',
+    color: '#c24a00',
+    cover: 'img/lezione-blackout-bordo.jpg',
+    goals: ['Distinguere utenze essenziali e non essenziali', 'Vedere la sequenza automatica del black-out', 'Capire a che cosa servono UPS, gruppo di emergenza e ATS'],
+    start: startBlackoutBordo,
+    steps: [
+      {
+        type: 'info',
+        title: 'La centrale completa',
+        text: 'Questo yacht ha due gruppi principali, un gruppo di emergenza G3 sul ponte alto, un commutatore automatico KC1 e un UPS U1. Le luci di navigazione e la timoneria sono utenze essenziali: devono restare alimentate sempre.',
+        view: 'panoramica',
+        focus: ['G1', 'G2', 'G3', 'KC1', 'U1'],
+      },
+      {
+        type: 'action',
+        title: 'Avvia la centrale',
+        text: 'Il pulsante avvia i due gruppi principali, li sincronizza e li mette in parallelo. Il gruppo di emergenza resta fermo: parte solo se serve.',
+        todo: 'Premi “Avvia la centrale” in basso, oppure la leva del quadretto CENTRALE a sinistra del quadro.',
+        focus: ['meter'],
+        target: { power: true },
+        buttons: [{ label: 'Avvia la centrale', icon: 'power', run: (c) => c.power(true) }],
+        done: (c) => c.powered() && c.lit('E1'),
+        perform: (c) => c.power(true),
+      },
+      {
+        type: 'info',
+        title: 'Chi tiene accese le luci se manca tutto',
+        text: 'Il commutatore KC1 alimenta il quadro di emergenza dalla rete normale. Se la rete normale manca, dopo un secondo passa sulla rete di emergenza, dove arriva il gruppo G3. Nei secondi in cui G3 si avvia, l’UPS tiene accese le luci con la batteria.',
+        why: 'Le norme marittime (SOLAS) chiedono che l’alimentazione di emergenza arrivi entro 45 secondi.',
+        focus: ['KC1', 'U1', 'G3'],
+      },
+      {
+        type: 'action',
+        title: 'Ferma G1',
+        text: 'Simuliamo un guasto grave: si ferma il primo gruppo. Il secondo regge ancora tutto.',
+        todo: 'Ferma il gruppo G1 (clicca il gruppo o “Ferma il gruppo” nelle Proprietà).',
+        focus: ['G1'],
+        target: { tag: 'G1', action: 'genStop' },
+        done: (c) => !c.st('G1').running,
+        perform: (c) => c.act('G1', 'genStop'),
+      },
+      {
+        type: 'action',
+        title: 'Ferma anche G2: black-out',
+        text: 'Senza gruppi la sbarra principale è senza tensione. Guarda le luci di navigazione: restano accese, alimentate dalla batteria dell’UPS.',
+        todo: 'Ferma il gruppo G2.',
+        focus: ['G2', 'U1', 'E1'],
+        target: { tag: 'G2', action: 'genStop' },
+        done: (c) => !c.st('G2').running && c.st('U1').mode === 'batteria',
+        perform: (c) => c.act('G2', 'genStop'),
+        settle: 1,
+      },
+      {
+        type: 'action',
+        title: 'Aspetta il gruppo di emergenza',
+        text: 'Nessuno deve fare niente: G3 si avvia da solo, chiude sulla sbarra di emergenza e il commutatore KC1 passa sulla rete di emergenza. La timoneria riparte.',
+        todo: 'Osserva G3, KC1 e la timoneria M2 per qualche secondo.',
+        focus: ['G3', 'KC1', 'M2'],
+        done: (c) => !!c.st('G3').closed && c.st('KC1').src === 'emerg',
+        perform: () => {},
+        settle: 8,
+      },
+      {
+        type: 'quiz',
+        title: 'Che cosa è successo all’elica di manovra e alla cucina?',
+        text: 'Guarda M1 e la presa della cucina XS1.',
+        focus: ['M1', 'XS1'],
+        options: [
+          { text: 'Sono rimaste senza tensione: non sono utenze essenziali e stanno sul quadro principale', correct: true, feedback: 'Esatto: il gruppo di emergenza alimenta solo il quadro di emergenza, con le utenze che servono alla sicurezza.' },
+          { text: 'Funzionano come prima', feedback: 'No: il gruppo di emergenza è piccolo e alimenta solo le utenze essenziali.' },
+          { text: 'Si sono bruciate', feedback: 'No: sono solo senza tensione; torneranno in servizio con i gruppi principali.' },
+        ],
+      },
+      {
+        type: 'action',
+        title: 'Riavvia G1',
+        text: 'Il guasto è riparato: riavviamo il primo gruppo.',
+        todo: 'Clicca G1 per avviarlo.',
+        focus: ['G1'],
+        target: { tag: 'G1', action: 'genStart' },
+        done: (c) => !!c.st('G1').running,
+        perform: (c) => c.act('G1', 'genStart'),
+      },
+      {
+        type: 'action',
+        title: 'Chiudi G1 sulla sbarra principale',
+        text: 'La sbarra principale torna in tensione. Dopo qualche secondo il commutatore ritorna sulla rete normale e, mezzo minuto dopo, G3 si ferma da solo.',
+        todo: 'Chiudi l’interruttore di G1 (clicca il gruppo).',
+        focus: ['G1', 'KC1'],
+        target: { tag: 'G1', action: 'close' },
+        done: (c) => !!c.st('G1').closed && c.st('KC1').src === 'normal',
+        perform: (c) => c.act('G1', 'close'),
+        settle: 12,
+      },
+      {
+        type: 'end',
+        title: 'Hai gestito un black-out!',
+        text: 'Hai visto la sequenza automatica che tiene al sicuro una nave quando manca l’energia.',
+        recap: ['Le utenze essenziali stanno sul quadro di emergenza, dietro un commutatore automatico.', 'L’UPS copre i secondi di avviamento del gruppo di emergenza.', 'Il gruppo di emergenza parte, chiude e si ferma da solo; l’alimentazione torna entro 45 s.'],
+        view: 'panoramica',
+      },
+    ],
+  },
 ];
 
 export const lessonById = (id) => LESSONS.find((l) => l.id === id);
@@ -724,7 +1123,7 @@ export function makeContext({ project, sim, app = null, memo = {} }) {
     st: (tag) => sim.getInst(idOf(tag))?.state || {},
     view: (tag) => sim.getInst(idOf(tag))?.view || {},
     par: (tag) => project.params(idOf(tag)),
-    powered: () => !!sim.getInst('XA')?.state.on && !sim.getInst('XA')?.state.limiter,
+    powered: () => !!sim.powerState?.().on,
     lit: (tag) => (sim.getInst(idOf(tag))?.view.bright || 0) > 0.5,
     wireBetween: (a, b) => {
       const ra = ref(a);
@@ -738,7 +1137,7 @@ export function makeContext({ project, sim, app = null, memo = {} }) {
       const roles = [project.terminal(ra)?.role, project.terminal(rb)?.role];
       const color = roles.includes('PE') ? 'yg' : roles.includes('N') ? 'blue' : roles.includes('coil') || roles.includes('aux') || roles.includes('ctrl') ? 'red' : 'brown';
       const types = [ra, rb].map((r) => project.comp(r.c)?.type);
-      const section = types.includes('supply') ? 6 : types.includes('xs') ? 2.5 : roles.includes('coil') || roles.includes('aux') || roles.includes('ctrl') ? 1 : 1.5;
+      const section = types.includes('genset') || types.includes('shore') ? 25 : types.includes('supply') ? 6 : types.includes('xs') ? 2.5 : roles.includes('coil') || roles.includes('aux') || roles.includes('ctrl') ? 1 : 1.5;
       return project.addWire(ra, rb, { color, section });
     },
     act: (tag, action, phase = 'click') => {
@@ -752,22 +1151,11 @@ export function makeContext({ project, sim, app = null, memo = {} }) {
       setTimeout(() => ctx.act(tag, action, 'up'), 280);
     },
     power: (on = true) => {
-      const s = sim.getInst('XA')?.state;
-      if (!s) return;
-      if (on && (!s.on || s.limiter)) {
-        if (app) app.togglePower();
-        else {
-          s.on = true;
-          s.limiter = false;
-          sim.settle();
-        }
-      } else if (!on && s.on) {
-        if (app) app.togglePower();
-        else {
-          s.on = false;
-          sim.settle();
-        }
-      }
+      // arrivo linea (contatore) oppure centrale di gruppi elettrogeni: stessa scorciatoia
+      const isOn = !!sim.powerState?.().on;
+      if (on === isOn) return;
+      if (app) app.togglePower();
+      else sim.setPower(on);
     },
     setParam: (tag, key, value) => project.setParam(idOf(tag), key, value),
     setTool: (tool) => app?.interaction.setTool(tool),

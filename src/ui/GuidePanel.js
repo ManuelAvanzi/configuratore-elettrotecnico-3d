@@ -71,7 +71,7 @@ export class GuidePanel {
       for (const ex of exercisesOfTrack(t.id)) {
         el.append(h('button', { class: 'ex-card', onclick: () => this.start(ex) },
           h('div', { class: 'ex-cover', style: { background: ex.color } }, icon(ex.icon, 26)),
-          h('div', {}, h('b', {}, ex.title), h('p', {}, ex.summary), h('span', { class: 'lvl' }, `${ex.level} · ${ex.duration} · ${PHASES[ex.phase - 1].title}${ex.teacher ? ' · con il docente' : ''}${ex.keep ? ' · sul tuo impianto' : ''}`))));
+          h('div', {}, h('b', {}, ex.title), h('p', {}, ex.summary), h('span', { class: 'lvl' }, `${ex.level} · ${ex.duration} · ${PHASES[ex.phase - 1].title}${ex.teacher ? ' · con il docente' : ''}${ex.keep ? ' · sul tuo impianto' : ''}${ex.tema === 'nave' ? ' · a bordo' : ''}`))));
       }
     }
   }

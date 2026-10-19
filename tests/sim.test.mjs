@@ -481,7 +481,7 @@ section('16. Modelli predefiniti e soluzioni delle esercitazioni senza non confo
   const { PRESETS } = await import('../src/presets/index.js');
   const { EXERCISES } = await import('../src/exercises/index.js');
   const cases = [
-    ...PRESETS.filter((p) => !p.id.startsWith('vuoto')).map((p) => [p.title, p.make()]),
+    ...PRESETS.filter((p) => !p.id.startsWith('vuoto') && !p.id.endsWith('-vuoto')).map((p) => [p.title, p.make()]), // i modelli “da configurare” sono volutamente incompleti
     ...EXERCISES.filter((e) => e.solution).map((e) => ['Soluzione: ' + e.title, e.solution()]),
   ];
   for (const [title, data] of cases) {

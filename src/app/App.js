@@ -184,7 +184,7 @@ export class App extends Emitter {
     data.meta.title = ex.title;
     this.loadProject(data, { keepHistory: true });
     this.right?.show('guide');
-    this.goView(id === 'motore' ? 'panoramica' : 'quadro');
+    this.goView(ex.view || (id === 'motore' ? 'panoramica' : 'quadro'));
   }
 
   scheduleSave() {

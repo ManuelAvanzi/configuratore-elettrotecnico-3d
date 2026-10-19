@@ -44,11 +44,25 @@ export const PRESETS = [
     make: domotica,
   },
   {
+    id: 'nave-vuoto',
+    title: 'Quadro di bordo da configurare',
+    text: 'Un gruppo da 50 kVA a 440 V 60 Hz con neutro isolato e il collettore di terra: tutto il resto lo monta lo studente (arrivo, controllo isolamento, partenze, utenze).',
+    icon: 'waves',
+    make: naveVuota,
+  },
+  {
     id: 'nave',
     title: 'Centrale elettrica di bordo',
     text: 'Due gruppi da 50 kVA a 440 V 60 Hz con neutro isolato (IT), presa di banchina, gruppo di emergenza con commutatore automatico e UPS, distacco dei carichi non essenziali, elica di manovra e luci di navigazione.',
     icon: 'waves',
     make: nave,
+  },
+  {
+    id: 'traghetto',
+    title: 'Traghetto: quadro a due semisbarre',
+    text: 'Due gruppi da 100 kVA su due semisbarre unite da un congiuntore; pompe di sentina e antincendio, ventilazione del garage, cucina, aria condizionata e luci.',
+    icon: 'waves',
+    make: traghetto,
   },
 ];
 
@@ -302,5 +316,99 @@ export function domotica() {
     b.wire('BG1:N', 'E2:N');
     b.wire('BG1:OUT', 'E4:L', 1.5, 'grey');
     b.wire('E4:N', 'BG1:N');
+  });
+}
+
+/** Quadro di bordo da configurare: un gruppo da 50 kVA e il collettore di terra, tutto il resto lo monta lo studente */
+export function naveVuota() {
+  return build({ sys: '3F', source: 'none', title: 'Quadro di bordo da configurare', description: 'Un gruppo diesel-generatore da 50 kVA a 440 V 60 Hz con neutro isolato: montare l’arrivo, il controllo dell’isolamento, le partenze e le utenze.' }, (b) => {
+    b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo principale: 50 kVA, 440 V 60 Hz, neutro isolato.');
+  });
+}
+
+/** Traghetto: quadro principale a due semisbarre con congiuntore, due gruppi da 100 kVA, pompe e servizi */
+export function traghetto() {
+  return build({ sys: '3F', source: 'none', title: 'Traghetto: quadro a due semisbarre', description: 'Quadro principale di un piccolo traghetto: due gruppi da 100 kVA a 440 V 60 Hz, ciascuno sulla propria semisbarra, unite da un congiuntore. A sinistra pompa di sentina, ventilazione del garage e luci; a destra pompa antincendio, cucina, aria condizionata e luci. Con il congiuntore aperto le due metà sono indipendenti; chiudendolo i gruppi lavorano in parallelo e un gruppo può alimentare tutta la nave.' }, (b) => {
+    b.add('G1', 'genset', 'A1', { Sn: 100, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo della semisbarra sinistra.');
+    b.add('G2', 'genset', 'A3', { Sn: 100, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo della semisbarra destra.');
+    b.add('Q1', 'mcb4p', 'R1:0', { In: 125, curve: 'C', pdi: 10 }, 'Arrivo G1 (corrente nominale del gruppo 131 A): cavi da 70 mm².');
+    b.add('Q2', 'mcb4p', 'R1:4', { In: 125, curve: 'C', pdi: 10 }, 'Arrivo G2.');
+    b.add('QC', 'isol4p', 'R1:8', { In: 160 }, 'Congiuntore di sbarra: chiuso, le due semisbarre lavorano in parallelo; aperto, ogni gruppo alimenta la sua metà. Aprilo e prova l’avaria di un gruppo.');
+    b.add('KI1', 'imd', 'R1:12', { soglia: 50 }, 'Controllo dell’isolamento (sistema IT).');
+    b.add('Q3', 'mcb3p', 'R2:0', { In: 40, curve: 'D', pdi: 10 }, 'Pompa di sentina 15 kW (semisbarra sinistra).');
+    b.add('Q4', 'mcb3p', 'R2:3', { In: 32, curve: 'D', pdi: 10 }, 'Ventilazione del garage 11 kW.');
+    b.add('Q5', 'mcb1pn', 'R2:6', { In: 10, curve: 'C', pdi: 10 }, 'Luci di sinistra.');
+    b.add('Q6', 'mcb3p', 'R3:0', { In: 40, curve: 'D', pdi: 10 }, 'Pompa antincendio 15 kW (semisbarra destra).');
+    b.add('Q7', 'mcb1pn', 'R3:3', { In: 16, curve: 'C', pdi: 10 }, 'Cucina.');
+    b.add('Q8', 'mcb1pn', 'R3:5', { In: 16, curve: 'C', pdi: 10 }, 'Aria condizionata.');
+    b.add('Q9', 'mcb1pn', 'R3:7', { In: 10, curve: 'C', pdi: 10 }, 'Luci di destra.');
+    b.add('M1', 'm3', 'B1', { P: 15, conn: 'Y', load: 80 }, 'Pompa di sentina.');
+    b.add('M2', 'm3', 'B3', { P: 15, conn: 'Y', load: 80 }, 'Pompa antincendio.');
+    b.add('E1', 'lamp', 'B5', { lt: 'led15' }, 'Luci di sinistra.');
+    b.add('M3', 'm3', 'C1', { P: 11, conn: 'Y', load: 70 }, 'Ventilazione del garage.');
+    b.add('XS1', 'xs', 'C3', { carico: 'oven', tipo: 'sch' }, 'Cucina.');
+    b.add('XS2', 'xs', 'C4', { carico: 'aircon', tipo: 'sch' }, 'Aria condizionata.');
+    b.add('E2', 'lamp', 'C5', { lt: 'led15' }, 'Luci di destra.');
+    for (const [G, Q] of [['G1', 'Q1'], ['G2', 'Q2']]) {
+      b.wire(`${G}:L1`, `${Q}:1`, 70);
+      b.wire(`${G}:L2`, `${Q}:3`, 70);
+      b.wire(`${G}:L3`, `${Q}:5`, 70);
+      b.wire(`${G}:N`, `${Q}:N1`, 70);
+    }
+    b.wire('G1:PE', 'PE:PE1', 35);
+    b.wire('G2:PE', 'PE:PE2', 35);
+    // semisbarra sinistra (Q1) → congiuntore e partenze
+    b.wire('Q1:2', 'QC:1', 50);
+    b.wire('Q1:4', 'QC:3', 50);
+    b.wire('Q1:6', 'QC:5', 50);
+    b.wire('Q1:N2', 'QC:N1', 50);
+    b.wire('Q1:2', 'Q3:1', 50);
+    b.wire('Q1:4', 'Q3:3', 50);
+    b.wire('Q1:6', 'Q3:5', 50);
+    b.wire('Q3:1', 'Q4:1', 50);
+    b.wire('Q3:3', 'Q4:3', 50);
+    b.wire('Q3:5', 'Q4:5', 50);
+    b.wire('Q4:1', 'Q5:1', 50);
+    b.wire('Q1:N2', 'Q5:N1', 50);
+    // semisbarra destra (Q2) → congiuntore e partenze
+    b.wire('Q2:2', 'QC:2', 50);
+    b.wire('Q2:4', 'QC:4', 50);
+    b.wire('Q2:6', 'QC:6', 50);
+    b.wire('Q2:N2', 'QC:N2', 50);
+    b.wire('Q2:2', 'Q6:1', 50);
+    b.wire('Q2:4', 'Q6:3', 50);
+    b.wire('Q2:6', 'Q6:5', 50);
+    b.wire('Q6:1', 'Q7:1', 50);
+    b.wire('Q7:1', 'Q8:1', 50);
+    b.wire('Q8:1', 'Q9:1', 50);
+    b.wire('Q2:N2', 'Q7:N1', 50);
+    b.wire('Q7:N1', 'Q8:N1', 50);
+    b.wire('Q8:N1', 'Q9:N1', 50);
+    // utenze
+    b.wire('Q3:2', 'M1:U1', 10);
+    b.wire('Q3:4', 'M1:V1', 10);
+    b.wire('Q3:6', 'M1:W1', 10);
+    b.wire('M1:PE', 'PE:PE4', 10);
+    b.wire('Q4:2', 'M3:U1', 6);
+    b.wire('Q4:4', 'M3:V1', 6);
+    b.wire('Q4:6', 'M3:W1', 6);
+    b.wire('M3:PE', 'PE:PE6', 6);
+    b.wire('Q5:2', 'E1:L', 1.5, 'grey');
+    b.wire('Q5:N2', 'E1:N', 1.5);
+    b.wire('Q5:2', 'KI1:L', 1.5);
+    b.wire('Q5:N2', 'KI1:N', 1.5);
+    b.wire('KI1:PE', 'PE:PE3', 1.5);
+    b.wire('Q6:2', 'M2:U1', 10);
+    b.wire('Q6:4', 'M2:V1', 10);
+    b.wire('Q6:6', 'M2:W1', 10);
+    b.wire('M2:PE', 'PE:PE5', 10);
+    b.wire('Q7:2', 'XS1:L', 2.5);
+    b.wire('Q7:N2', 'XS1:N', 2.5);
+    b.wire('XS1:PE', 'PE:PE7', 2.5);
+    b.wire('Q8:2', 'XS2:L', 2.5);
+    b.wire('Q8:N2', 'XS2:N', 2.5);
+    b.wire('XS2:PE', 'PE:PE8', 2.5);
+    b.wire('Q9:2', 'E2:L', 1.5, 'grey');
+    b.wire('Q9:N2', 'E2:N', 1.5);
   });
 }

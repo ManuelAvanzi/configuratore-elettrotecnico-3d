@@ -6,7 +6,7 @@ import { Simulator } from '../src/sim/engine.js';
 import { DEFS } from '../src/catalog/defs/index.js';
 import { runChecks } from '../src/sim/checks.js';
 import { build } from '../src/presets/builder.js';
-import { nave } from '../src/presets/index.js';
+import { nave, naveVuota, traghetto } from '../src/presets/index.js';
 import { gensetRated } from '../src/catalog/defs/nautico.js';
 
 let pass = 0;
@@ -545,6 +545,49 @@ section('10. Verifiche da registro navale');
   ok(t3.checks().some((r) => r.id === 'reg-emerg' && r.level === 'warn'), 'senza sorgente di emergenza la verifica avvisa');
   // sistema del progetto e scorciatoia di alimentazione con la banchina presente
   ok(t.p.sources().length === 4 && t.p.system().kind === 'genset', 'quattro sorgenti (tre gruppi e la banchina); il sistema resta quello dei gruppi');
+}
+
+section('11. Modelli di bordo aggiuntivi: quadro da configurare e traghetto a due semisbarre');
+{
+  const v = rig(naveVuota());
+  ok(v.p.components.filter((c) => !DEFS[c.type].fixed).length === 1 && v.p.sources().length === 1 && v.p.system().kind === 'genset', 'quadro da configurare: solo il gruppo G1 (sistema 440 V 60 Hz dei gruppi)');
+  ok(v.p.components.some((c) => c.type === 'pebar'), 'il collettore di terra è presente');
+  v.sim.setPower(true);
+  ok(v.inst('G1').state.running && v.inst('G1').state.closed, 'il gruppo si avvia e chiude anche senza utenze');
+  ok(v.checks().some((r) => r.id === 'it-imd' && r.level === 'error'), 'manca il controllo dell’isolamento: segnalato allo studente');
+
+  const t = rig(traghetto());
+  ok(t.p.sources().length === 2 && t.p.components.filter((c) => c.type === 'genset').every((c) => c.params.Sn === 100), 'traghetto: due gruppi da 100 kVA');
+  const errs = t.checks().filter((r) => r.level === 'error');
+  ok(!errs.length, 'traghetto: nessuna non conformità', errs.map((e) => e.title).join(' | '));
+  t.sim.setPower(true);
+  t.run(3);
+  const g1 = t.inst('G1').state;
+  const g2 = t.inst('G2').state;
+  ok(g1.closed && g2.closed && !g1.trip && !g2.trip, 'con il congiuntore chiuso i due gruppi lavorano in parallelo');
+  ok(Math.abs(g1.P - g2.P) / Math.max(1, g1.P) < 0.1, `il carico si divide a metà (${(g1.P / 1000).toFixed(1)} / ${(g2.P / 1000).toFixed(1)} kW)`);
+  ok(t.sim.busAt(t.id('G1'), 'L1') === t.sim.busAt(t.id('G2'), 'L1'), 'le due semisbarre sono la stessa isola');
+  ok(['M1', 'M2', 'M3'].every((m) => t.inst(m).state.mode === 'run'), 'pompe e ventilazione in marcia');
+  ok(['E1', 'E2'].every((e) => t.inst(e).view.bright > 0.5), 'luci di sinistra e di destra accese');
+  // congiuntore aperto: due isole indipendenti, ogni gruppo alimenta la sua metà
+  t.act('QC', 'toggle');
+  t.sim.settle();
+  t.run(1);
+  ok(!t.inst('QC').state.on, 'congiuntore aperto');
+  ok(t.sim.busAt(t.id('G1'), 'L1') !== t.sim.busAt(t.id('G2'), 'L1'), 'ora le semisbarre sono due isole distinte');
+  ok(t.inst('G1').state.closed && t.inst('G2').state.closed && ['E1', 'E2'].every((e) => t.inst(e).view.bright > 0.5), 'ogni gruppo alimenta la propria semisbarra');
+  // avaria di G2 con congiuntore aperto: la metà destra resta al buio
+  t.act('G2', 'genStop');
+  t.sim.settle();
+  t.run(1);
+  ok(t.inst('E1').view.bright > 0.5 && t.inst('E2').view.bright < 0.1, 'G2 fermo e congiuntore aperto: la semisbarra destra è senza tensione');
+  // si chiude il congiuntore: G1 riprende tutta la nave
+  t.act('QC', 'toggle');
+  t.sim.settle();
+  t.run(4);
+  ok(t.inst('QC').state.on && t.inst('E2').view.bright > 0.5 && t.inst('G1').state.closed && !t.inst('G1').state.trip, 'congiuntore richiuso: G1 alimenta entrambe le semisbarre');
+  const bus = t.sim.busAt(t.id('G1'), 'L1');
+  ok(bus && bus.loading > 0.3 && bus.loading < 1, `G1 regge tutto il carico (${Math.round((bus?.loading || 0) * 100)} %)`);
 }
 
 console.log(`\n${pass} superati, ${fail} falliti`);

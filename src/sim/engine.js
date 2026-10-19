@@ -105,10 +105,10 @@ export class Simulator {
             byKey.set(key, { kind: 'OPEN', a: map(e.a), b: map(e.b) });
             continue;
           }
-          el = { kind: 'Y', a: map(e.a), b: map(e.b), y: C(1 / R_CONTACT, 0) };
+          el = { kind: 'Y', a: map(e.a), b: map(e.b), y: C(1 / R_CONTACT, 0), lowZ: true };
         } else if (e.kind === 'Z') {
           const d = e.z.re * e.z.re + e.z.im * e.z.im;
-          el = { kind: 'Y', a: map(e.a), b: map(e.b), y: C(e.z.re / d, -e.z.im / d) };
+          el = { kind: 'Y', a: map(e.a), b: map(e.b), y: C(e.z.re / d, -e.z.im / d), lowZ: d < 1e6 };
         } else if (e.kind === 'SRC') {
           const y = cinv(e.zs);
           el = { kind: 'N', a: map(e.a), b: map(e.b), y, is: cmul(e.e, y) };
@@ -148,14 +148,29 @@ export class Simulator {
     }
     const gRoot = uf.find(G);
     const done = new Set();
-    const root = new Int32Array(n);
     for (let i = 0; i < n; i++) {
       const r = uf.find(i);
-      root[i] = r;
       if (r === gRoot || done.has(r)) continue;
       done.add(r);
       els.push({ kind: 'Y', a: i, b: -1, y: C(1e-6, 0), key: '#ref' + i });
     }
+
+    // Isole di potenza (sbarre): nodi uniti solo da conduttori, contatti chiusi, avvolgimenti e impedenze
+    // basse (sotto 1 kΩ). Le resistenze di isolamento verso terra e i carichi ad alta impedenza non uniscono
+    // due sbarre: così due semisbarre con il congiuntore aperto, o la sbarra di emergenza dietro l'ATS,
+    // risultano isole distinte anche se condividono il PE.
+    const pw = new UnionFind(n);
+    for (const e of els) {
+      if (e.kind === 'T') {
+        if (e.p1 >= 0 && e.p2 >= 0) pw.union(e.p1, e.p2);
+        if (e.s1 >= 0 && e.s2 >= 0) pw.union(e.s1, e.s2);
+        continue;
+      }
+      if (e.a < 0 || e.b < 0) continue;
+      if (e.kind === 'N' || e.R !== undefined || e.lowZ) pw.union(e.a, e.b);
+    }
+    const root = new Int32Array(n);
+    for (let i = 0; i < n; i++) root[i] = pw.find(i);
     return { n, nodes, els, byKey, root };
   }
 
