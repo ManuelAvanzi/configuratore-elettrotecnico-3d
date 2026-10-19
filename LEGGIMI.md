@@ -243,6 +243,9 @@ La homepage e l'elenco delle lezioni del tutorial si aggiornano da soli.
 
 ## Prossimi passi (proposta)
 
+- **Impianti di bordo (nautico) e media tensione**: proposta dettagliata, con le idee ricavate dal quaderno ABB
+  QT12, in [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
+
 - Modalità **multiutente**: docente e studenti sullo stesso banco (visore + PC + LIM sincronizzati).
 - **Schema unifilare/multifilare** generato automaticamente dal cablaggio, anche nella scheda tecnica.
 - Nuovi componenti: trasformatore di sicurezza 230/24 V, alimentatore 24 V c.c., temporizzatore ritardato,
