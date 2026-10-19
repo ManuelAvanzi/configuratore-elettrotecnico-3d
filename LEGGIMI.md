@@ -56,19 +56,33 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   sezioni minime delle prese, relè termico del motore, potenza contrattuale, cadute di tensione, morsetti con più
   di 2 conduttori.
 - **Strumenti di misura**: multimetro (tensione tra due morsetti) e pinza amperometrica (corrente in un cavo).
-- **Esercitazioni guidate** con passi verificati in automatico e *prove di funzionamento* simulate:
-  punto luce, quadro di un appartamento, relè passo-passo, luce scale e presenza, teleavviamento motore,
-  valutazione dei carichi, guasto a terra (con il docente).
+- **Esercitazioni guidate** con passi verificati in automatico e *prove di funzionamento* simulate, organizzate
+  nelle **cinque esercitazioni pratiche della scheda del laboratorio**:
+  1. *Configurazione base di un impianto elettrico* — punto luce, quadro di un appartamento;
+  2. *Montaggio virtuale di un quadro con collegamenti logici* — relè passo-passo, teleavviamento motore;
+  3. *Configurazione di un impianto domotico per uso civile* — luce scale e presenza, la casa automatica
+     (passo-passo, temporizzatore, crepuscolare, rilevatore di presenza);
+  4. *Analisi dei parametri guidata dal docente* — valutazione dei carichi, distanze/sezioni/protezioni,
+     guasto a terra;
+  5. *Presentazione dello studente della configurazione adottata* — percorso sull'impianto attuale: dati del
+     progetto, motivazione di ogni protezione, quattro domande di giustificazione, verifiche, presentazione e
+     scheda tecnica.
 - **Modalità docente**: inserimento di guasti (dispersioni, massa franca, persona a contatto, cavo interrotto,
   morsetto allentato) e caricamento delle soluzioni.
-- **Scheda tecnica** stampabile/PDF (output finale del laboratorio): immagini del banco, dati di fornitura,
-  distinta, elenco collegamenti, verifiche, misure, motivazioni delle scelte, esito dell'esercitazione.
-- **Presentazione guidata** per proiettore/LIM: la telecamera accompagna la classe componente per componente.
+- **Giustificazione delle scelte** (pannello Progetto): quattro domande — fornitura e potenza, protezioni,
+  conduttori, varianti scartate — le cui risposte finiscono nella presentazione e nella scheda tecnica.
+- **Scheda tecnica** stampabile/PDF (output finale del laboratorio insieme all'impianto esplorabile): immagini
+  del banco, dati di fornitura, distinta, elenco collegamenti, verifiche, misure, motivazioni delle scelte,
+  giustificazioni, esito dell'esercitazione.
+- **Presentazione guidata** per proiettore/LIM: progetto → le scelte (giustificazioni) → componente per
+  componente con la sua motivazione → verifiche. È lo strumento della Fase 4.
 - **Realtà virtuale (WebXR)**: raggi dei controller, teletrasporto e rotazione a scatti, tablet sul controller
   sinistro (strumenti, libreria, simulazione, proprietà), etichette fluttuanti, vibrazione dei controller.
 
-Le 4 fasi della scheda del laboratorio corrispondono a: *Modelli* (Fase 1) → configurazione e cablaggio (Fase 2) →
-simulazione, misure e *Verifiche* (Fase 3) → *Scheda tecnica* e *Presenta* (Fase 4).
+Le 4 fasi della scheda del laboratorio corrispondono a: *Modelli predefiniti* (Fase 1 — introduzione al
+configuratore) → configurazione e cablaggio, anche in VR (Fase 2) → *analisi dei parametri guidata dal docente*
+con misure e *Verifiche* (Fase 3) → *Presenta* e *Scheda tecnica* (Fase 4 — verifica e presentazione finale della
+configurazione adottata).
 
 ---
 
@@ -89,7 +103,7 @@ Poi apri <http://localhost:5190> (homepage).
 | `npm run dev:quest` | come sopra ma in rete locale con HTTPS, per aprirlo dal visore |
 | `npm run build` | versione da pubblicare nella cartella `dist/` (sito statico con le tre pagine) |
 | `npm run preview` | prova locale della versione `dist/` |
-| `npm test` | tutti i collaudi: simulatore e verifiche (67 prove) + lezioni del tutorial (70 prove) |
+| `npm test` | tutti i collaudi: simulatore e verifiche (68 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) |
 
 ### Provarlo sul visore (Meta Quest)
 
@@ -134,12 +148,14 @@ src/
   interaction/   puntamento, strumenti (seleziona, cabla, misura, posiziona), mouse e tastiera
   ui/            interfaccia: barra, libreria, proprietà, verifiche, esercitazioni, LIM, presentazione
   xr/            realtà virtuale: sessione, controller, teletrasporto, tablet su canvas
-  exercises/     esercitazioni guidate del laboratorio completo (passi, prove, domande)
+  exercises/     esercitazioni guidate del laboratorio completo: fasi, i 5 percorsi della scheda (TRACKS),
+                 domande di giustificazione (JUSTIFICATIONS), esercitazioni (passi, prove, domande)
   presets/       modelli predefiniti
   report/        scheda tecnica stampabile
   styles/        app.css (laboratorio), tutorial.css, home.css
 public/img/      immagini della homepage e copertine delle lezioni (ricavate dal 3D)
-tests/           collaudo in Node: simulatore (sim.test.mjs) e lezioni del tutorial (lessons.test.mjs)
+tests/           collaudo in Node: simulatore (sim.test.mjs), lezioni del tutorial (lessons.test.mjs),
+                 esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove)
 ```
 
 La parte elettrica (`src/sim`, `src/catalog/defs`, `src/core`) non dipende da Three.js: si collauda in Node e si può
@@ -154,6 +170,23 @@ riusare (es. in un server per la modalità multiutente).
 3. Per il 3D: i dispositivi DIN si descrivono in `src/models/dinTypes.js` (serigrafia e dotazioni), quelli di campo
    in `src/models/field.js`.
 4. Aggiungi uno scenario in `tests/sim.test.mjs`.
+
+### Aggiungere un'esercitazione al laboratorio
+
+Le esercitazioni sono dati in `src/exercises/index.js`:
+
+1. Aggiungi un oggetto a `EXERCISES` con `id`, `track` (uno dei cinque percorsi in `TRACKS`), `title`, `level`,
+   `phase` (1–4), `icon`, `color`, `duration`, `summary`, `goals`, `start()` (progetto di partenza) e, se c'è,
+   `solution()`; `teacher: true` se è guidata dal docente, `keep: true` se lavora sull'impianto attuale invece di
+   sostituirlo (come la presentazione).
+2. `steps`: ogni passo ha `text`, facoltativo `hint`, e `done(ctx)` che restituisce vero quando il passo è fatto
+   (`ctx` è `exerciseContext`: `has`, `count`, `wired`, `termWired`, `lampFrom`, `checkOk/Err/Warn`, `powered`,
+   `seen` per ricordare un evento osservato, `meta`, `just`, `protections`, `noted`…). Un passo che richiede
+   un'azione dal vivo (dare corrente, premere) va marcato `live: true`.
+3. `tests`: prove di funzionamento con `label` e `run(ctx)`; `ctx.scenario([...])` simula l'impianto in isolamento
+   (passi `power`, `set`, `params`, `act`, `env`, `wait`, `check`).
+4. `questions`: le domande per l'analisi guidata dal docente (finiscono nella scheda tecnica).
+5. `npm run test:esercitazioni` controlla la struttura e che la soluzione completi i passi e superi le prove.
 
 ### Aggiungere una lezione al tutorial
 

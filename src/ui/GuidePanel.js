@@ -1,6 +1,7 @@
 // Scheda Esercitazioni: percorso guidato con passi verificati automaticamente e prove di funzionamento.
 import { h, icon, clear } from './dom.js';
-import { EXERCISES, PHASES, exerciseById, exerciseContext } from '../exercises/index.js';
+import { DEFS } from '../catalog/defs/index.js';
+import { PHASES, TRACKS, exercisesOfTrack, trackById, exerciseById, exerciseContext } from '../exercises/index.js';
 
 export class GuidePanel {
   constructor(app) {
@@ -23,7 +24,7 @@ export class GuidePanel {
   }
 
   phaseStrip(active) {
-    return h('div', { class: 'phase-strip' }, PHASES.map((p) => h('div', { class: 'phase' + (p.n === active ? ' active' : '') }, h('b', {}, p.title), p.text)));
+    return h('div', { class: 'phase-strip' }, PHASES.map((p) => h('div', { class: 'phase' + (p.n === active ? ' active' : ''), title: p.text }, h('b', {}, p.title), p.short || p.text)));
   }
 
   render(el) {
@@ -31,11 +32,13 @@ export class GuidePanel {
     const ex = this.current;
     if (!ex) return this.renderList(el);
     const app = this.app;
+    const track = trackById(ex.track);
     el.append(
       h('button', { class: 'btn ghost small', style: { marginBottom: '10px' }, onclick: () => this.exit() }, icon('back', 14), 'Tutte le esercitazioni'),
       h('div', { class: 'insp-head' },
         h('div', { class: 'ex-cover', style: { background: ex.color, width: '48px', height: '48px' } }, icon(ex.icon, 24)),
-        h('div', { class: 'insp-title' }, h('div', { class: 'kind' }, `${ex.level} · ${ex.duration}`), h('h3', {}, ex.title))),
+        h('div', { class: 'insp-title' }, h('div', { class: 'kind' }, `${ex.level} · ${ex.duration}${ex.teacher ? ' · con il docente' : ''}`), h('h3', {}, ex.title))),
+      track ? h('div', { class: 'track-tag' }, h('b', {}, `Esercitazione ${track.n}`), track.title) : null,
       this.phaseStrip(ex.phase),
       h('div', { class: 'section-title' }, icon('flag', 13), 'Obiettivi'),
       h('ul', { class: 'goal-list' }, ex.goals.map((g) => h('li', {}, g))));
@@ -49,9 +52,9 @@ export class GuidePanel {
       testBtn, this.resEl));
     if (this.results?.id === ex.id) this.paintResults();
     if (ex.questions?.length) {
-      el.append(h('div', { class: 'section' }, h('div', { class: 'section-title' }, icon('help', 13), 'Analisi guidata dal docente'),
+      el.append(h('div', { class: 'section' }, h('div', { class: 'section-title' }, icon('help', 13), 'Analisi dei parametri guidata dal docente'),
         h('ul', { class: 'goal-list' }, ex.questions.map((q) => h('li', {}, q))),
-        h('p', { class: 'help-text', style: { fontSize: '11.5px' } }, 'Scrivi le risposte e le motivazioni nelle note dei componenti o nella descrizione del progetto: finiscono nella scheda tecnica.')));
+        h('p', { class: 'help-text', style: { fontSize: '11.5px' } }, 'Scrivi le risposte nelle motivazioni dei componenti o nelle giustificazioni del pannello Progetto: finiscono nella scheda tecnica e nella presentazione.')));
     }
     const tools = h('div', { class: 'section btn-row' });
     if (app.settings.teacher && ex.solution) tools.append(h('button', { class: 'btn', onclick: () => this.loadSolution() }, icon('eye', 15), 'Carica la soluzione'));
@@ -61,16 +64,26 @@ export class GuidePanel {
 
   renderList(el) {
     el.append(
-      h('p', { class: 'help-text', style: { marginTop: 0 } }, 'Percorsi guidati per la classe: ogni esercitazione parte da un quadro predisposto, controlla i passi in automatico e verifica il funzionamento con la simulazione.'),
+      h('p', { class: 'help-text', style: { marginTop: 0 } }, 'Le cinque esercitazioni pratiche della scheda del laboratorio. Ogni percorso parte da un quadro predisposto, controlla i passi in automatico e verifica il funzionamento con la simulazione.'),
       this.phaseStrip(0));
-    for (const ex of EXERCISES) {
-      el.append(h('button', { class: 'ex-card', onclick: () => this.start(ex) },
-        h('div', { class: 'ex-cover', style: { background: ex.color } }, icon(ex.icon, 26)),
-        h('div', {}, h('b', {}, ex.title), h('p', {}, ex.summary), h('span', { class: 'lvl' }, `${ex.level} · ${ex.duration} · ${PHASES[ex.phase - 1].title}${ex.teacher ? ' · con il docente' : ''}`))));
+    for (const t of TRACKS) {
+      el.append(h('div', { class: 'track-head' }, h('b', {}, `${t.n}. ${t.title}`), h('p', {}, t.text)));
+      for (const ex of exercisesOfTrack(t.id)) {
+        el.append(h('button', { class: 'ex-card', onclick: () => this.start(ex) },
+          h('div', { class: 'ex-cover', style: { background: ex.color } }, icon(ex.icon, 26)),
+          h('div', {}, h('b', {}, ex.title), h('p', {}, ex.summary), h('span', { class: 'lvl' }, `${ex.level} · ${ex.duration} · ${PHASES[ex.phase - 1].title}${ex.teacher ? ' · con il docente' : ''}${ex.keep ? ' · sul tuo impianto' : ''}`))));
+      }
     }
   }
 
   async start(ex) {
+    if (ex.keep) {
+      // lavora sull'impianto attuale: nessuna sostituzione del progetto
+      this.app.startExercise(ex.id);
+      const n = this.app.project.components.filter((c) => !DEFS[c.type].fixed).length;
+      if (n < 3) this.app.toast('Il banco è quasi vuoto: configura un impianto o apri un modello predefinito (pannello Progetto), poi presentalo.', 'info', 7000);
+      return;
+    }
     const ok = await this.app.modals.confirm(ex.title, 'L’esercitazione parte da un nuovo progetto: quello attuale verrà sostituito (puoi annullare con Ctrl+Z o salvarlo prima). Continuare?', 'Inizia');
     if (!ok) return;
     this.app.startExercise(ex.id);

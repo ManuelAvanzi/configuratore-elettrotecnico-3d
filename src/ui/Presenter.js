@@ -6,6 +6,7 @@ const appendAll = (el, ...kids) => el.append(...kids.filter((k) => k !== null &&
 import { DEFS } from '../catalog/defs/index.js';
 import { summarize } from '../sim/checks.js';
 import { mountLabel } from '../core/layout.js';
+import { JUSTIFICATIONS } from '../exercises/index.js';
 
 export class Presenter {
   constructor(app) {
@@ -24,6 +25,7 @@ export class Presenter {
     const comps = p.components.filter((c) => c.type !== 'pebar').sort((a, b) => order(a) - order(b));
     return [
       { kind: 'intro' },
+      { kind: 'scelte' },
       ...comps.map((c) => ({ kind: 'comp', id: c.id })),
       { kind: 'checks' },
     ];
@@ -107,6 +109,18 @@ export class Presenter {
         h('div', { class: 'muted' }, [m.author, m.classe, m.school].filter(Boolean).join(' · ') || 'Studente / classe non indicati'),
         m.description ? h('p', { class: 'help-text', style: { color: 'var(--text)', fontSize: '14px' } }, m.description) : null,
         h('p', { class: 'help-text' }, `${p.components.filter((c) => !DEFS[c.type].fixed).length} componenti · ${p.wires.filter((w) => !w.fixed).length} conduttori · alimentazione ${p.params('XA').sys === '3F' ? 'trifase 400 V' : 'monofase 230 V'}, sistema ${p.params('XA').earth}`),
+        nav);
+    } else if (s.kind === 'scelte') {
+      // giustificazione delle scelte (Fase 4: presentazione della configurazione adottata)
+      app.view.flag([], []);
+      app.goView('quadro');
+      const js = p.meta.justifications || {};
+      appendAll(el,
+        h('div', { class: 'muted', style: { fontFamily: 'var(--font-ui)', fontWeight: 800, letterSpacing: '.06em', fontSize: '11px' } }, 'LE SCELTE DEL PROGETTO'),
+        h('h2', { style: { margin: '6px 0 8px', fontFamily: 'var(--font-ui)', fontSize: '22px' } }, 'Perché l’impianto è fatto così'),
+        ...JUSTIFICATIONS.map((j) => h('div', { style: { margin: '0 0 8px' } },
+          h('div', { class: 'section-title', style: { marginBottom: '2px' } }, j.label),
+          h('p', { class: 'help-text', style: { color: js[j.key]?.trim() ? 'var(--text)' : 'var(--dim)', fontSize: '13.5px', margin: 0 } }, js[j.key]?.trim() || `Da scrivere nel pannello Progetto: ${j.q}`))),
         nav);
     } else if (s.kind === 'comp') {
       const c = p.comp(s.id);

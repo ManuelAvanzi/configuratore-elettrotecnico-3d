@@ -4,6 +4,7 @@ import { DEFS } from '../catalog/defs/index.js';
 import { WIRE_COLORS, SECTIONS, colorById, iz, fmt, fmtA, fmtV } from '../sim/norms.js';
 import { cabs } from '../sim/complex.js';
 import { mountLabel } from '../core/layout.js';
+import { JUSTIFICATIONS } from '../exercises/index.js';
 
 const ACTIONS = {
   toggle: { icon: 'toggle', label: (s, def) => (['sa', 'sd', 'si', 'kpp'].includes(def.type) ? 'Commuta' : s.on ? 'Apri (OFF)' : 'Chiudi (ON)') },
@@ -253,6 +254,13 @@ export class Inspector {
         h('div', { class: 'grid2' }, f('author', 'Studente / gruppo', 'Nome e cognome'), f('classe', 'Classe', 'es. 4ª A')),
         h('div', { class: 'grid2' }, f('school', 'Istituto', 'Nome dell’istituto'), f('date', 'Data', '', 'date')),
         f('description', 'Descrizione e obiettivo dell’impianto', 'Che cosa alimenta l’impianto e con quali scelte progettuali…', 'textarea')),
+      h('div', { class: 'section' }, h('div', { class: 'section-title' }, icon('book', 13), 'Giustificazione delle scelte'),
+        h('p', { class: 'help', style: { marginTop: 0 } }, 'Le risposte compaiono nella presentazione e nella scheda tecnica (Fase 4).'),
+        ...JUSTIFICATIONS.map((j) => {
+          const js = (m.justifications = m.justifications || {});
+          return h('div', { class: 'field' }, h('label', {}, j.label),
+            h('textarea', { placeholder: j.q, rows: 2, oninput: (e) => { js[j.key] = e.target.value; app.scheduleSave(); } }, js[j.key] || ''));
+        })),
       h('div', { class: 'section' }, h('div', { class: 'section-title' }, icon('box', 13), 'Riepilogo'),
         h('div', { class: 'readouts' },
           h('div', { class: 'ro' }, h('span', {}, 'Componenti'), h('b', {}, String(comps))),

@@ -332,6 +332,11 @@ export class Simulator {
           const inst = this.inst.get(id);
           if (inst) Object.assign(inst.state, patch);
           this.settle();
+        } else if (st.env) {
+          // ambiente (es. luminosità esterna per il crepuscolare); ripristinato dallo snapshot
+          Object.assign(this.env, st.env);
+          this.markDirty();
+          this.settle();
         } else if (st.wait) {
           let t = st.wait;
           while (t > 0) {

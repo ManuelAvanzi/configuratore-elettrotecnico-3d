@@ -54,7 +54,7 @@ export class App extends Emitter {
     this.simSpeed = 1;
     this.simAcc = 0;
     this.selection = null;
-    this.flags = { limiter: false, rcdTrip: false };
+    this.flags = { limiter: false, rcdTrip: false, presented: false, reported: false, seen: {} };
     this.settings = {
       scale: 1.25,
       teacher: false,
@@ -160,18 +160,26 @@ export class App extends Emitter {
     this.select(null);
     this.interaction.setTool('select');
     this.project.load(data, opts);
-    this.flags = { limiter: false, rcdTrip: false };
+    this.flags = { limiter: false, rcdTrip: false, presented: false, reported: false, seen: {} };
     const sup = this.sim.getInst('XA');
     if (sup) sup.state.on = false;
   }
 
   startExercise(id) {
     const ex = exerciseById(id);
+    if (this.guide) this.guide.results = null;
+    if (ex.keep) {
+      // esercitazione sull'impianto attuale (es. presentazione): il progetto non viene sostituito
+      this.project.setProjectMeta({ exercise: { id, started: new Date().toISOString() } });
+      this.flags.seen = {};
+      this.right?.show('guide');
+      this.goView('panoramica');
+      return;
+    }
     const data = ex.start();
     data.meta.exercise = { id, started: new Date().toISOString() };
     data.meta.title = ex.title;
     this.loadProject(data, { keepHistory: true });
-    if (this.guide) this.guide.results = null;
     this.right?.show('guide');
     this.goView(id === 'motore' ? 'panoramica' : 'quadro');
   }
@@ -411,10 +419,12 @@ export class App extends Emitter {
   // ── Uscite ────────────────────────────────────────────────────────────────────────
   report() {
     openReport(this);
+    this.flags.reported = true; // passo “scheda tecnica” del percorso di presentazione
   }
 
   togglePresentation() {
     this.presenter?.toggle();
+    if (this.presenter?.active) this.flags.presented = true;
   }
 
   enterVR() {

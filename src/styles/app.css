@@ -349,3 +349,11 @@ a.brand:hover .brand-mark { background: var(--accent-2); }
   .brand-text span, .project-title, .meters .meter:nth-child(n + 3) { display: none; }
   .lastevent { display: none; }
 }
+
+/* Esercitazioni: i cinque percorsi della scheda del laboratorio */
+.track-head { margin: 14px 0 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.track-head:first-of-type { border-top: 0; padding-top: 0; }
+.track-head b { display: block; font-family: var(--font-ui); font-size: 12.5px; color: var(--text); }
+.track-head p { margin: 2px 0 0; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.track-tag { display: flex; gap: 8px; align-items: baseline; margin: 2px 0 10px; font-size: 11.5px; color: var(--muted); line-height: 1.35; }
+.track-tag b { flex: none; font-family: var(--font-ui); font-size: 10.5px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-2); }

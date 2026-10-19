@@ -1,18 +1,40 @@
 // Esercitazioni guidate del laboratorio (dalla scheda “Dispositivi elettrotecnici: configuratore 3D”).
-// Ogni passo ha una verifica automatica; le prove di funzionamento simulano l'impianto in isolamento
-// (il circuito reale dello studente non viene modificato).
+// Ogni passo ha una verifica automatica (`done`); i passi `live` richiedono un'azione dal vivo (dare corrente,
+// premere un pulsante) e non sono soddisfatti dalla sola soluzione. Le prove di funzionamento simulano
+// l'impianto in isolamento (il circuito reale dello studente non viene modificato).
 import { blankProject } from '../core/project.js';
 import { build } from '../presets/builder.js';
-import { appartamento, motore } from '../presets/index.js';
+import { appartamento, motore, domotica } from '../presets/index.js';
 import { resolveParams } from '../catalog/defs/common.js';
 import { DEFS } from '../catalog/defs/index.js';
 
+// Le quattro fasi della scheda del laboratorio (modalità di svolgimento).
 export const PHASES = [
-  { n: 1, title: 'Fase 1', text: 'Introduzione al configuratore e ai modelli' },
-  { n: 2, title: 'Fase 2', text: 'Configurazione e progettazione' },
-  { n: 3, title: 'Fase 3', text: 'Simulazione e analisi tecnica' },
-  { n: 4, title: 'Fase 4', text: 'Verifica e presentazione' },
+  { n: 1, title: 'Fase 1', text: 'Introduzione al configuratore e ai modelli predefiniti', short: 'Introduzione e modelli' },
+  { n: 2, title: 'Fase 2', text: 'Configurazione e progettazione in VR', short: 'Configurazione in VR' },
+  { n: 3, title: 'Fase 3', text: 'Analisi tecnica dei parametri guidata dal docente', short: 'Analisi con il docente' },
+  { n: 4, title: 'Fase 4', text: 'Verifica e presentazione finale della configurazione adottata', short: 'Verifica e presentazione' },
 ];
+
+// Le cinque esercitazioni pratiche in classe previste dalla scheda del catalogo: ogni esercitazione
+// del configuratore appartiene a uno di questi percorsi (campo `track`).
+export const TRACKS = [
+  { n: 1, id: 'base', title: 'Configurazione base di un impianto elettrico', text: 'Protezione, comando e utilizzatore; poi il quadro di un appartamento con le sue linee.' },
+  { n: 2, id: 'quadro', title: 'Montaggio virtuale di un quadro con collegamenti logici tra componenti', text: 'Circuito di comando e circuito di potenza: relè, contattori, autoritenuta.' },
+  { n: 3, id: 'domotica', title: 'Configurazione di un impianto domotico per uso civile', text: 'Comandi automatici per l’abitazione: temporizzatori, crepuscolare, rilevatore di presenza.' },
+  { n: 4, id: 'parametri', title: 'Analisi dei parametri guidata dal docente', text: 'Si cambia un parametro alla volta e si osserva l’effetto: carichi, cadute di tensione, protezioni, guasti.' },
+  { n: 5, id: 'presentazione', title: 'Presentazione dello studente della configurazione adottata', text: 'Lo studente espone l’impianto configurato e giustifica le scelte prese.' },
+];
+export const trackById = (id) => TRACKS.find((t) => t.id === id);
+
+// Domande di giustificazione delle scelte (pannello Progetto → scheda tecnica e presentazione).
+export const JUSTIFICATIONS = [
+  { key: 'power', label: 'Fornitura e potenza', q: 'Perché hai scelto questa potenza contrattuale e questo sistema di distribuzione?' },
+  { key: 'protection', label: 'Protezioni', q: 'Come hai scelto interruttori e differenziali (In, curva, IΔn, potere di interruzione)?' },
+  { key: 'wiring', label: 'Conduttori', q: 'Come hai scelto sezioni, colori e percorsi dei conduttori?' },
+  { key: 'alternatives', label: 'Varianti scartate', q: 'Quali soluzioni alternative hai considerato e perché le hai scartate?' },
+];
+const filled = (s, min = 15) => typeof s === 'string' && s.trim().length >= min;
 
 // ── Contesto per le verifiche ────────────────────────────────────────────────────────
 export function exerciseContext(app) {
@@ -39,7 +61,24 @@ export function exerciseContext(app) {
     allWired: (type, t) => comps(type).length > 0 && comps(type).every((c) => p.wires.some((w) => (w.a.c === c.id && w.a.t === t) || (w.b.c === c.id && w.b.t === t))),
     checkOk: (prefix) => checks().some((r) => r.id.startsWith(prefix) && r.level === 'ok'),
     checkErr: (prefix) => checks().some((r) => r.id.startsWith(prefix) && r.level === 'error'),
+    checkWarn: (prefix) => checks().some((r) => r.id.startsWith(prefix) && r.level === 'warn'),
     noErrors: (prefix = '') => !checks().some((r) => r.id.startsWith(prefix) && r.level === 'error'),
+    noWarns: (prefix = '') => !checks().some((r) => r.id.startsWith(prefix) && (r.level === 'error' || r.level === 'warn')),
+    /** segna un evento osservato durante l'esercitazione (si azzera quando si ricomincia) */
+    seen: (name, now) => {
+      if (!app?.flags) return !!now;
+      app.flags.seen = app.flags.seen || {};
+      if (now) app.flags.seen[name] = true;
+      return !!app.flags.seen[name];
+    },
+    meta: () => p.meta,
+    just: (key) => p.meta.justifications?.[key] || '',
+    /** componenti montati dallo studente (esclusi arrivo linea e collettore di terra) */
+    mounted: () => p.components.filter((c) => !DEFS[c.type].fixed),
+    protections: () => p.components.filter((c) => DEFS[c.type].protection),
+    noted: (c) => filled(c.note, 10),
+    /** lampada alimentata dal morsetto (tipo, morsetto) */
+    lampFrom: (type, t) => comps('lamp').find((l) => p.wires.some((w) => (endIs(w.a, type, t) && w.b.c === l.id) || (endIs(w.b, type, t) && w.a.c === l.id))),
     powered: () => !!sim.getInst('XA')?.state.on,
     lit: (id) => (sim.getInst(id)?.view.bright || 0) > 0.5,
     anyLit: () => comps('lamp').some((c) => (sim.getInst(c.id)?.view.bright || 0) > 0.5),
@@ -57,6 +96,7 @@ const anyTripped = (sim) => [...sim.inst.values()].some((i) => i.state.tripped);
 export const EXERCISES = [
   {
     id: 'punto-luce',
+    track: 'base',
     title: 'Il primo impianto: un punto luce',
     level: 'Base',
     phase: 2,
@@ -86,7 +126,7 @@ export const EXERCISES = [
       { text: 'Collega l’arrivo linea ai morsetti superiori del magnetotermico: L → 1 e N → N.', hint: 'Strumento Cabla (W): clic sul morsetto L di XA, poi sul morsetto 1 del magnetotermico. Stessa cosa per il neutro.', done: (c) => c.wired('supply', 'L1', 'mcb1pn', '1') && c.wired('supply', 'N', 'mcb1pn', 'N1') },
       { text: 'Sul pannello utenze monta un interruttore e un punto luce.', done: (c) => c.has('sa') && c.has('lamp') },
       { text: 'Collega la fase dal magnetotermico (2) all’interruttore, dall’interruttore alla lampada (L), e il neutro dal magnetotermico (N) alla lampada.', hint: 'Il comando deve interrompere la fase, mai il neutro.', done: (c) => c.termWired('lamp', 'L') && c.termWired('lamp', 'N') && c.termWired('sa', 'L') && c.termWired('sa', '1') },
-      { text: 'Alimenta l’impianto e accendi la lampada con l’interruttore.', hint: 'Pulsante “Impianto non alimentato” in basso, poi clic sul tasto dell’interruttore.', done: (c) => c.powered() && c.anyLit() },
+      { live: true, text: 'Alimenta l’impianto e accendi la lampada con l’interruttore.', hint: 'Pulsante “Impianto non alimentato” in basso, poi clic sul tasto dell’interruttore.', done: (c) => c.powered() && c.anyLit() },
     ],
     tests: [
       {
@@ -112,6 +152,7 @@ export const EXERCISES = [
 
   {
     id: 'appartamento',
+    track: 'base',
     title: 'Il quadro di un appartamento',
     level: 'Intermedio',
     phase: 2,
@@ -132,7 +173,7 @@ export const EXERCISES = [
       { text: 'Alimenta le due linee dal generale (2 → 1, N → N) con cavi da 4 mm².', done: (c) => c.allWired('mcb1pn', '1') && c.allWired('mcb1pn', 'N1') && c.termWired('rcbo1pn', '2') },
       { text: 'Sulla linea luci realizza un punto luce comandato da interruttore.', done: (c) => c.has('lamp') && c.has('sa') && c.termWired('lamp', 'L') },
       { text: 'Sulla linea prese installa due prese 2P+T in cavo da 2,5 mm², con il PE collegato al collettore di terra.', hint: 'Il PE parte da un morsetto libero della barra di terra (PE) e arriva al morsetto PE della presa.', done: (c) => c.count('xs') >= 2 && c.comps('xs').every((x) => c.checkOk('pe-' + x.id)) },
-      { text: 'Alimenta l’impianto, collega una stufetta e una lavatrice alle prese e leggi la potenza al contatore.', hint: 'Seleziona una presa e scegli l’apparecchio collegato.', done: (c) => c.powered() && (c.sim.getInst('XA')?.state.P || 0) > 3000 },
+      { live: true, text: 'Alimenta l’impianto, collega una stufetta e una lavatrice alle prese e leggi la potenza al contatore.', hint: 'Seleziona una presa e scegli l’apparecchio collegato.', done: (c) => c.powered() && (c.sim.getInst('XA')?.state.P || 0) > 3000 },
     ],
     tests: [
       { label: 'Ogni presa è protetta da un differenziale da 30 mA', run: (c) => c.count('xs') > 0 && c.comps('xs').every((x) => c.checkOk('rcd-' + x.id)) },
@@ -166,13 +207,14 @@ export const EXERCISES = [
 
   {
     id: 'passo-passo',
+    track: 'quadro',
     title: 'Luce comandata da tre punti con relè passo-passo',
     level: 'Intermedio',
     phase: 2,
     icon: 'sparkles',
     color: '#8a4fd0',
     duration: '1 ora',
-    summary: 'Impianto domotico di base: pulsanti in parallelo e relè a impulsi.',
+    summary: 'Collegamenti logici: pulsanti in parallelo che comandano la bobina di un relè a impulsi.',
     goals: ['Distinguere circuito di comando e circuito di potenza', 'Usare pulsanti in parallelo per comandare una bobina', 'Comprendere il funzionamento “a impulsi”'],
     start: () => blankProject({ sys: '1F', title: 'Relè passo-passo' }),
     solution: () => build({ sys: '1F', title: 'Relè passo-passo — soluzione' }, (b) => {
@@ -222,6 +264,7 @@ export const EXERCISES = [
 
   {
     id: 'luce-scale',
+    track: 'domotica',
     title: 'Luce scale temporizzata e sensore di presenza',
     level: 'Intermedio',
     phase: 3,
@@ -259,7 +302,7 @@ export const EXERCISES = [
       { text: 'Collega due pulsanti in parallelo sulla bobina del temporizzatore (A1-A2).', done: (c) => c.termWired('kt', 'A1') && c.termWired('kt', 'A2') && c.count('sp') >= 2 },
       { text: 'Alimenta una lampada attraverso il contatto 15-18.', done: (c) => c.termWired('kt', '15') && c.termWired('kt', '18') && c.has('lamp') },
       { text: 'Aggiungi un rilevatore di presenza: L e N per alimentarlo, OUT verso una seconda lampada.', done: (c) => c.has('pir') && c.termWired('pir', 'L') && c.termWired('pir', 'N') && c.termWired('pir', 'OUT') },
-      { text: 'Alimenta l’impianto, premi un pulsante e osserva lo spegnimento automatico.', done: (c) => c.powered() && c.comps('kt').some((k) => (c.state(k.id).remaining || 0) > 0) },
+      { live: true, text: 'Alimenta l’impianto, premi un pulsante e osserva lo spegnimento automatico.', done: (c) => c.powered() && c.comps('kt').some((k) => (c.state(k.id).remaining || 0) > 0) },
     ],
     tests: [
       {
@@ -292,6 +335,7 @@ export const EXERCISES = [
 
   {
     id: 'motore',
+    track: 'quadro',
     title: 'Teleavviamento di un motore asincrono trifase',
     level: 'Avanzato',
     phase: 2,
@@ -314,7 +358,7 @@ export const EXERCISES = [
       { text: 'Circuito di potenza: magnetotermico → contattore (1-3-5 / 2-4-6) → relè termico → motore (U1-V1-W1), più il PE al motore.', done: (c) => c.termWired('m3', 'U1') && c.termWired('m3', 'V1') && c.termWired('m3', 'W1') && c.termWired('m3', 'PE') },
       { text: 'Circuito di comando a 230 V: magnetotermico 1P+N → 95-96 del relè termico → ARRESTO (NC) → MARCIA (NA) → A1; A2 al neutro.', done: (c) => c.termWired('km3', 'A1') && c.termWired('km3', 'A2') && c.termWired('fr3', '95') && c.termWired('ss', '1') },
       { text: 'Realizza l’autoritenuta: contatto 13-14 del contattore in parallelo al pulsante di MARCIA.', done: (c) => c.termWired('km3', '13') && c.termWired('km3', '14') },
-      { text: 'Alimenta e avvia il motore con la pulsantiera.', done: (c) => c.comps('m3').some((m) => c.state(m.id).mode === 'run') },
+      { live: true, text: 'Alimenta e avvia il motore con la pulsantiera.', done: (c) => c.comps('m3').some((m) => c.state(m.id).mode === 'run') },
     ],
     tests: [
       {
@@ -367,6 +411,7 @@ export const EXERCISES = [
 
   {
     id: 'carichi',
+    track: 'parametri',
     title: 'Valutazione dei carichi e potenza impegnata',
     level: 'Base',
     phase: 3,
@@ -389,6 +434,7 @@ export const EXERCISES = [
 
   {
     id: 'guasto-terra',
+    track: 'parametri',
     title: 'Guasto a terra e protezione delle persone',
     level: 'Intermedio',
     phase: 3,
@@ -410,6 +456,183 @@ export const EXERCISES = [
     tests: [{ label: 'Tutte le masse sono collegate a terra', run: (c) => c.noErrors('pe-') }],
     questions: ['Perché nel sistema TT il magnetotermico da solo non basta contro i contatti indiretti?', 'Qual è la massima resistenza di terra ammessa con un differenziale da 30 mA?'],
   },
+  // ── Percorso 3: impianto domotico per uso civile ───────────────────────────────────
+  {
+    id: 'domotica-civile',
+    track: 'domotica',
+    title: 'La casa automatica: comandi domotici per uso civile',
+    level: 'Intermedio',
+    phase: 2,
+    icon: 'house',
+    color: '#1f8ad0',
+    duration: '2 ore',
+    summary: 'Configurazione di un impianto domotico civile: relè passo-passo, luce scale temporizzata, luce esterna con crepuscolare, garage con rilevatore di presenza.',
+    goals: [
+      'Suddividere l’impianto in funzioni (soggiorno, scale, esterno, garage) e automatizzarle',
+      'Distinguere comando manuale, a impulsi, temporizzato e automatico',
+      'Verificare l’impianto con la simulazione: luminosità esterna, presenza, tempi',
+    ],
+    start: () => {
+      const p = blankProject({ sys: '1F', title: 'La casa automatica' });
+      p.components[0].params.Pc = 4.5;
+      return p;
+    },
+    solution: domotica,
+    steps: [
+      { text: 'Quadro: monta un magnetotermico-differenziale 1P+N (30 mA) come generale e un magnetotermico 1P+N da 10 A per la linea luci; collegali all’arrivo linea e tra loro.', hint: 'XA → generale (1, N); generale (2, N) → magnetotermico luci (1, N).', done: (c) => c.has('rcbo1pn', (p) => p.IDn <= 0.03) && c.has('mcb1pn', (p) => p.In === 10) && c.wired('supply', 'L1', 'rcbo1pn', '1') && c.termWired('mcb1pn', '1') && c.termWired('mcb1pn', 'N1') },
+      { text: 'Soggiorno: relè passo-passo comandato da tre pulsanti in parallelo (3 sulla fase, 4 verso A1, A2 al neutro); la lampada si alimenta dal contatto 11-14.', done: (c) => c.has('kpp') && c.count('sp', (p) => p.contact === 'NA') >= 3 && c.termWired('kpp', 'A1') && c.termWired('kpp', 'A2') && c.termWired('kpp', '11') && !!c.lampFrom('kpp', '14') },
+      { text: 'Scale: temporizzatore luce scale impostato a 20 s, un quarto pulsante sulla bobina (A1-A2) e una seconda lampada sul contatto 15-18.', done: (c) => c.has('kt', (p) => p.T === 20) && c.count('sp') >= 4 && c.termWired('kt', 'A1') && c.termWired('kt', 'A2') && c.termWired('kt', '15') && !!c.lampFrom('kt', '18') },
+      { text: 'Esterno: interruttore crepuscolare con soglia 20 lx, alimentato tra L e N; il contatto 15-18 accende la luce esterna.', hint: 'Il crepuscolare va alimentato (L, N) e in più il morsetto 15 riceve la fase da commutare.', done: (c) => c.has('kcr', (p) => p.lux === 20) && c.termWired('kcr', 'L') && c.termWired('kcr', 'N') && c.termWired('kcr', '15') && !!c.lampFrom('kcr', '18') },
+      { text: 'Garage: rilevatore di presenza (L e N per alimentarlo, OUT verso una lampada).', done: (c) => c.has('pir') && c.termWired('pir', 'L') && c.termWired('pir', 'N') && !!c.lampFrom('pir', 'OUT') },
+      { live: true, text: 'Alimenta l’impianto e simula la sera: abbassa la luminosità esterna con il cursore del sole (barra in basso) sotto 20 lx. La luce esterna si accende da sola.', done: (c) => c.powered() && c.comps('kcr').some((k) => c.state(k.id).out) },
+    ],
+    tests: [
+      {
+        label: 'Ogni pulsante del soggiorno accende e spegne la lampada del relè passo-passo',
+        run: (c) => {
+          const ka = c.first('kpp');
+          const e = c.lampFrom('kpp', '14');
+          if (!ka || !e) return false;
+          // pulsanti collegati (direttamente o in parallelo tra loro) alla bobina A1
+          const a1 = new Set([ka.id + ':A1']);
+          let grew = true;
+          while (grew) {
+            grew = false;
+            for (const w of c.p.wires) {
+              const ka_ = w.a.c + ':' + w.a.t;
+              const kb_ = w.b.c + ':' + w.b.t;
+              if (a1.has(ka_) !== a1.has(kb_)) {
+                a1.add(ka_);
+                a1.add(kb_);
+                grew = true;
+              }
+            }
+          }
+          const sbs = c.comps('sp').filter((s) => a1.has(s.id + ':4') || a1.has(s.id + ':3'));
+          if (sbs.length < 3) return false;
+          const steps = [{ power: true }];
+          for (const s of sbs.slice(0, 3)) steps.push({ act: [s.id, 'press', 'down'] }, { act: [s.id, 'press', 'up'] }, { check: (x) => lampBright(x, e.id) > 0.5 });
+          const r = c.scenario(steps);
+          return r.length === 3 && r[0] === true && r[1] === false && r[2] === true;
+        },
+      },
+      {
+        label: 'La luce scale si accende con un impulso e si spegne da sola dopo 20 s',
+        run: (c) => {
+          const kt = c.first('kt');
+          const lamp = c.lampFrom('kt', '18');
+          if (!kt || !lamp) return false;
+          const T = c.par(kt).T;
+          const sb = c.comps('sp').find((s) => c.p.wires.some((w) => (w.a.c === s.id && w.b.c === kt.id && w.b.t === 'A1') || (w.b.c === s.id && w.a.c === kt.id && w.a.t === 'A1')));
+          if (!sb) return false;
+          const r = c.scenario([{ power: true }, { act: [sb.id, 'press', 'down'] }, { act: [sb.id, 'press', 'up'] }, { check: (s) => lampBright(s, lamp.id) > 0.5 }, { wait: T + 1 }, { check: (s) => lampBright(s, lamp.id) < 0.05 }]);
+          return r[0] && r[1];
+        },
+      },
+      {
+        label: 'La luce esterna si accende al buio e si spegne di giorno (crepuscolare)',
+        run: (c) => {
+          const kf = c.first('kcr');
+          const lamp = c.lampFrom('kcr', '18');
+          if (!kf || !lamp) return false;
+          const r = c.scenario([{ power: true }, { env: { lux: 400 } }, { check: (s) => lampBright(s, lamp.id) }, { env: { lux: 2 } }, { check: (s) => lampBright(s, lamp.id) }, { env: { lux: 400 } }, { check: (s) => lampBright(s, lamp.id) }]);
+          return r[0] < 0.05 && r[1] > 0.5 && r[2] < 0.05;
+        },
+      },
+      {
+        label: 'Il rilevatore di presenza accende la luce del garage',
+        run: (c) => {
+          const bg = c.first('pir');
+          const lamp = c.lampFrom('pir', 'OUT');
+          if (!bg || !lamp) return false;
+          const [r] = c.scenario([{ power: true }, { act: [bg.id, 'trigger'] }, { check: (s) => lampBright(s, lamp.id) > 0.5 }]);
+          return r;
+        },
+      },
+      { label: 'Nessun errore di coordinamento e colori dei conduttori conformi', run: (c) => c.noErrors('coord-') && !c.checkErr('col-') },
+    ],
+    questions: [
+      'Quale dei quattro comandi (passo-passo, temporizzato, crepuscolare, presenza) fa risparmiare più energia in una casa? Perché?',
+      'Perché crepuscolare e rilevatore di presenza hanno bisogno del neutro mentre un interruttore no?',
+      'Come cambieresti l’impianto per comandare anche la luce esterna a mano, oltre che dal crepuscolare?',
+    ],
+  },
+
+  // ── Percorso 4: analisi dei parametri guidata dal docente ─────────────────────────
+  {
+    id: 'parametri',
+    track: 'parametri',
+    title: 'Analisi dei parametri: distanze, sezioni e protezioni',
+    level: 'Intermedio',
+    phase: 3,
+    icon: 'sliders',
+    color: '#0f6fa0',
+    duration: '1 ora',
+    summary: 'Con il docente: si cambia un parametro alla volta e si osserva l’effetto su caduta di tensione, coordinamento Ib ≤ In ≤ Iz e potere di interruzione.',
+    goals: ['Legare un parametro di progetto a una grandezza misurata', 'Leggere e interpretare le verifiche tecniche', 'Motivare le scelte con i numeri'],
+    start: appartamento,
+    solution: null,
+    teacher: true,
+    steps: [
+      { text: 'Alimenta l’impianto, collega una stufetta a una presa e attiva la vista “Corrente” dei conduttori (barra in basso).', done: (c) => c.powered() && c.has('xs', (p) => p.carico === 'heater') && c.app?.settings.wireMode === 'flow' },
+      { text: 'Caduta di tensione: seleziona la presa con la stufetta e porta la “Distanza dal quadro” a 80 m. Nella scheda Verifiche la caduta di tensione supera il 4%.', hint: 'La caduta cresce con la lunghezza della linea e con la corrente: ΔV = 2 · ρ · L · I / S.', done: (c) => c.seen('dv', c.comps('xs').some((x) => c.par(x).carico === 'heater' && c.par(x).dist >= 80 && c.checkWarn('dv-' + x.id))) },
+      { text: 'Correggi: aumenta la sezione dei conduttori di quella presa (seleziona il cavo → Sezione) finché la caduta torna sotto il 4%, senza accorciare la linea.', done: (c) => c.seen('dv') && c.comps('xs').some((x) => c.par(x).dist >= 80 && c.checkOk('dv-' + x.id)) },
+      { text: 'Coordinamento: porta la corrente nominale del magnetotermico della linea prese a 25 A. La verifica Ib ≤ In ≤ Iz segnala che il cavo da 2,5 mm² non è più protetto. Poi riportalo a 16 A.', done: (c) => c.seen('coord', c.checkErr('coord-')) && c.noErrors('coord-') },
+      { text: 'Potere di interruzione: nell’arrivo linea XA porta la corrente di cortocircuito presunta a 10 kA. Quali interruttori non sono più adeguati? Scegli un potere di interruzione sufficiente.', done: (c) => (c.par(c.p.supply()).Icc || 0) >= 10 && c.seen('pdi', c.checkErr('pdi-')) && c.noErrors('pdi-') },
+      { text: 'Annota la motivazione (pannello Proprietà) sui componenti che hai modificato: presa, magnetotermico delle prese e generale, con il valore scelto e il perché.', done: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
+    ],
+    tests: [
+      { label: 'Nessuna caduta di tensione oltre il 4%', run: (c) => c.noWarns('dv-') },
+      { label: 'Coordinamento Ib ≤ In ≤ Iz e potere di interruzione corretti su tutti gli interruttori', run: (c) => c.noErrors('coord-') && c.noErrors('pdi-') },
+      { label: 'Almeno tre componenti con la motivazione scritta', run: (c) => c.mounted().filter((x) => c.noted(x)).length >= 3 },
+    ],
+    questions: [
+      'Scrivi la formula della caduta di tensione su una linea monofase: da quali grandezze dipende e come?',
+      'Che cosa succede se In > Iz? E se Ib > In? Quale dei due è più pericoloso per il cavo?',
+      'Che cosa rappresenta il potere di interruzione e perché dipende dal punto di consegna?',
+    ],
+  },
+
+  // ── Percorso 5: presentazione dello studente con giustificazione delle scelte ──────
+  {
+    id: 'presentazione',
+    track: 'presentazione',
+    title: 'Presenta la tua configurazione e giustifica le scelte',
+    level: 'Tutti i livelli',
+    phase: 4,
+    icon: 'present',
+    color: '#ff5900',
+    duration: '1 ora',
+    summary: 'Lo studente espone alla classe l’impianto che ha configurato: dati del progetto, motivazione di ogni protezione, risposte alle domande di giustificazione, verifiche e scheda tecnica.',
+    goals: ['Esporre una configurazione tecnica in modo ordinato', 'Giustificare ogni scelta con un criterio (norma, misura, costo, sicurezza)', 'Produrre l’output finale: impianto esplorabile e scheda tecnica'],
+    keep: true,
+    start: null,
+    solution: null,
+    steps: [
+      { text: 'Parti dall’impianto che hai configurato (oppure apri un modello predefinito e personalizzalo): servono almeno tre componenti collegati.', done: (c) => c.mounted().length >= 3 && c.p.wires.filter((w) => !w.fixed).length >= 2 },
+      { text: 'Compila i dati del progetto nel pannello Progetto: titolo, studente o gruppo, classe, descrizione e obiettivo dell’impianto.', hint: 'Il pannello Progetto compare quando non c’è niente di selezionato (Esc).', done: (c) => filled(c.meta().title, 3) && filled(c.meta().author, 3) && filled(c.meta().classe, 1) && filled(c.meta().description, 20) },
+      { text: 'Scrivi la “Motivazione della scelta” di ogni dispositivo di protezione (In, curva, IΔn, potere di interruzione) nel pannello Proprietà.', done: (c) => c.protections().length > 0 && c.protections().every((x) => c.noted(x)) },
+      { text: 'Rispondi alle quattro domande di giustificazione nel pannello Progetto: fornitura, protezioni, conduttori, varianti scartate.', done: (c) => JUSTIFICATIONS.every((j) => filled(c.just(j.key))) },
+      { text: 'Apri la scheda Verifiche: nessuna non conformità. Gli avvisi che restano vanno spiegati durante la presentazione.', done: (c) => c.mounted().length >= 3 && c.noErrors() },
+      { text: 'Alimenta l’impianto: durante la presentazione farai una prova di funzionamento dal vivo.', done: (c) => c.powered() },
+      { text: 'Avvia la Presentazione (barra in alto) e percorri le slide: progetto, scelte, componenti uno per uno, verifiche.', done: (c) => !!c.app?.flags?.presented },
+      { text: 'Genera la Scheda tecnica (stampa o PDF): è l’output finale del laboratorio insieme all’impianto esplorabile.', done: (c) => !!c.app?.flags?.reported },
+    ],
+    tests: [
+      { label: 'Dati del progetto completi (titolo, studente, classe, descrizione)', run: (c) => filled(c.meta().title, 3) && filled(c.meta().author, 3) && filled(c.meta().classe, 1) && filled(c.meta().description, 20) },
+      { label: 'Tutte le protezioni hanno una motivazione scritta', run: (c) => c.protections().length > 0 && c.protections().every((x) => c.noted(x)) },
+      { label: 'Le quattro giustificazioni sono scritte', run: (c) => JUSTIFICATIONS.every((j) => filled(c.just(j.key))) },
+      { label: 'Nessuna non conformità nelle verifiche', run: (c) => c.mounted().length >= 3 && c.noErrors() },
+    ],
+    questions: [
+      'Quale alternativa hai scartato e perché? Che cosa avresti guadagnato o perso?',
+      'Quale verifica o misura ti ha fatto cambiare una scelta durante il lavoro?',
+      'Che cosa cambieresti se la potenza contrattuale raddoppiasse? E se il sistema fosse TN-S invece di TT?',
+    ],
+  },
 ];
+
+/** Esercitazioni di un percorso del catalogo, nell'ordine dell'elenco */
+export const exercisesOfTrack = (trackId) => EXERCISES.filter((e) => e.track === trackId);
 
 export const exerciseById = (id) => EXERCISES.find((e) => e.id === id);

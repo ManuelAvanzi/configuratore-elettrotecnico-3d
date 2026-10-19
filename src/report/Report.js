@@ -6,7 +6,7 @@ import { mountLabel } from '../core/layout.js';
 import { colorById, fmt, fmtA, fmtV, fmtW, V_PHASE } from '../sim/norms.js';
 import { cabs, csub, power } from '../sim/complex.js';
 import { summarize, CHECK_GROUPS } from '../sim/checks.js';
-import { exerciseById, exerciseContext } from '../exercises/index.js';
+import { exerciseById, exerciseContext, trackById, JUSTIFICATIONS } from '../exercises/index.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const svg = (d) => `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:6px">${d}</svg>`;
@@ -117,10 +117,16 @@ export function openReport(app) {
   // Motivazioni
   const notes = comps.filter((c) => c.note?.trim()).map((c) => `<div class="note"><b>${esc(c.tag)} · ${esc(DEFS[c.type].short)}</b><p>${esc(c.note).replace(/\n/g, '<br>')}</p></div>`).join('') || '<p class="muted">Nessuna motivazione inserita. Scrivile nel pannello Proprietà di ogni componente (“Motivazione della scelta”).</p>';
 
+  // Giustificazione delle scelte (domande del pannello Progetto)
+  const js = m.justifications || {};
+  const anyJust = JUSTIFICATIONS.some((j) => js[j.key]?.trim());
+  const justHtml = JUSTIFICATIONS.map((j) => `<div class="q"><b>${esc(j.label)}</b><div class="sub">${esc(j.q)}</div>${js[j.key]?.trim() ? `<p>${esc(js[j.key]).replace(/\n/g, '<br>')}</p>` : '<div class="lines"></div>'}</div>`).join('');
+
   // Esercitazione
   let exHtml = '';
   const ex = m.exercise?.id ? exerciseById(m.exercise.id) : null;
   if (ex) {
+    const track = trackById(ex.track);
     const c = exerciseContext(app);
     const steps = ex.steps.map((s) => {
       let d = false;
@@ -133,10 +139,10 @@ export function openReport(app) {
     }).join('');
     const res = app.guide.results?.id === ex.id ? app.guide.results.out : null;
     exHtml = `<section><h2>Esercitazione: ${esc(ex.title)}</h2>
-      <p class="sub">${esc(ex.level)} · ${esc(ex.duration)}${m.exercise.completed ? ' · prove superate il ' + new Date(m.exercise.completed).toLocaleDateString('it-IT') : ''}</p>
+      <p class="sub">${track ? `Esercitazione ${track.n} della scheda del laboratorio: ${esc(track.title)} · ` : ''}${esc(ex.level)} · ${esc(ex.duration)}${m.exercise.completed ? ' · prove superate il ' + new Date(m.exercise.completed).toLocaleDateString('it-IT') : ''}</p>
       <h3>Passi</h3><ul class="steps">${steps}</ul>
       ${res ? `<h3>Prove di funzionamento</h3><ul class="steps">${res.map((r) => `<li class="${r.ok ? 'done' : 'ko'}">${r.ok ? ICO.ok : ICO.ko}${esc(r.label)}</li>`).join('')}</ul>` : ''}
-      <h3>Analisi guidata</h3>${ex.questions.map((q) => `<div class="q"><b>${esc(q)}</b><div class="lines"></div></div>`).join('')}</section>`;
+      <h3>Analisi dei parametri guidata dal docente</h3>${ex.questions.map((q) => `<div class="q"><b>${esc(q)}</b><div class="lines"></div></div>`).join('')}</section>`;
   }
 
   const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -184,6 +190,7 @@ ${m.description ? `<p>${esc(m.description).replace(/\n/g, '<br>')}</p>` : ''}
 <p class="sub">Verifiche semplificate a scopo didattico (CEI 64-8, CEI EN 60898-1, CEI EN 61008/61009, CEI-UNEL 35024/1).</p></section>
 <section><h2>Misure in esercizio</h2>${meas}</section>
 <section><h2>Motivazione delle scelte progettuali</h2>${notes}</section>
+<section><h2>Giustificazione delle scelte</h2>${anyJust ? '' : '<p class="muted">Le risposte si scrivono nel pannello Progetto (“Giustificazione delle scelte”); qui sotto lo spazio per compilarle a mano.</p>'}${justHtml}</section>
 ${exHtml}
 <footer><span>Generato con il Configuratore elettrotecnico 3D — laboratorio immersivo CarraroLab</span><span>${new Date().toLocaleString('it-IT')}</span></footer>
 </div>

@@ -18,6 +18,7 @@ export function blankProject({ sys = '1F', title = 'Nuovo impianto', earth = 'TT
       classe: '',
       date: new Date().toISOString().slice(0, 10),
       description: '',
+      justifications: {}, // risposte alle domande di giustificazione delle scelte (JUSTIFICATIONS)
       exercise: null,
     },
     components: [
@@ -32,6 +33,7 @@ export function blankProject({ sys = '1F', title = 'Nuovo impianto', earth = 'TT
 function migrate(d) {
   if (!d || typeof d !== 'object') return blankProject();
   d.meta = { ...blankProject().meta, ...(d.meta || {}) };
+  if (!d.meta.justifications || typeof d.meta.justifications !== 'object') d.meta.justifications = {};
   d.components = Array.isArray(d.components) ? d.components.filter((c) => DEFS[c.type]) : [];
   d.wires = Array.isArray(d.wires) ? d.wires : [];
   if (!d.components.find((c) => c.type === 'supply')) {

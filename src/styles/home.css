@@ -148,3 +148,12 @@ body.home { margin: 0; background: var(--dark); color: #e9eef3; font-family: var
   .brand-text > span, .nav-cta { display: none; }
   .phases { grid-template-columns: 1fr; }
 }
+
+/* Le cinque esercitazioni pratiche della scheda del laboratorio */
+.tracks { list-style: none; counter-reset: t; margin: 14px 0 34px; padding: 0; display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.tracks li { counter-increment: t; position: relative; background: #fff; border: 1px solid #e4e1d8; border-radius: 14px; padding: 16px 16px 14px 16px; }
+.tracks li::before { content: counter(t); display: inline-grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; font-family: var(--font-ui); font-weight: 800; font-size: 13px; margin-bottom: 10px; }
+.tracks li b { display: block; font-family: var(--font-ui); font-size: 15px; line-height: 1.3; }
+.tracks li p { margin: 6px 0 0; font-size: 13.5px; line-height: 1.5; color: #4a4f57; }
+@media (max-width: 1100px) { .tracks { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 700px) { .tracks { grid-template-columns: 1fr; } }
