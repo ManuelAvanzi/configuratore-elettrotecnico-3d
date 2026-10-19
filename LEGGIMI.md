@@ -103,6 +103,7 @@ Poi apri <http://localhost:5190> (homepage).
 | `npm run dev:quest` | come sopra ma in rete locale con HTTPS, per aprirlo dal visore |
 | `npm run build` | versione da pubblicare nella cartella `dist/` (sito statico con le tre pagine) |
 | `npm run preview` | prova locale della versione `dist/` |
+| `npm run pubblica` | pubblica il sito su GitHub Pages (ramo `gh-pages`) |
 | `npm test` | tutti i collaudi: simulatore e verifiche (68 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) |
 
 ### Provarlo sul visore (Meta Quest)
@@ -113,8 +114,21 @@ WebXR richiede HTTPS (tranne su `localhost`).
 2. Nel browser del Quest apri `https://IP-DEL-PC:5190` (l'IP lo stampa Vite) e accetta il certificato di sviluppo.
 3. Premi **Entra in VR**.
 
-In produzione basta pubblicare `dist/` su un qualunque hosting HTTPS (es. Cloudflare Pages, server della scuola):
-il visore apre l'indirizzo e si entra in VR dal browser, senza installare nulla.
+In produzione basta pubblicare `dist/` su un qualunque hosting HTTPS: il visore apre l'indirizzo e si entra in VR
+dal browser, senza installare nulla.
+
+### Sito online (GitHub Pages)
+
+Il laboratorio è pubblicato su **<https://manuelavanzi.github.io/configuratore-elettrotecnico-3d/>** (repo
+<https://github.com/ManuelAvanzi/configuratore-elettrotecnico-3d>, ramo `gh-pages`). Per aggiornarlo dopo una
+modifica:
+
+```bash
+npm run pubblica
+```
+
+Lo script costruisce `dist/`, lo spinge sul ramo `gh-pages` e il sito si aggiorna in circa un minuto. Servono le
+credenziali GitHub salvate sul PC (le stesse del `git push`).
 
 **Comandi in VR** — grilletto: seleziona / aziona / collega / trascina · levetta destra avanti: teletrasporto ·
 levetta destra di lato: rotazione a scatti · levetta sinistra: camminata · A: cambia strumento ·
