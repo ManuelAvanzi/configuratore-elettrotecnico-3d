@@ -11,7 +11,7 @@ e, dal browser del visore (Meta Quest), in **realtà virtuale** con il pulsante 
 
 | Pagina | File | Per chi |
 |---|---|---|
-| **Homepage** | `index.html` | presenta il laboratorio con un hero fotografico a tutto schermo (tre scene: classe, banco, quadro) e fa scegliere come iniziare (due card con foto) |
+| **Homepage** | `index.html` | marchio testuale “elettrolab”, hero fotografico a tutto schermo (tre scene: classe, banco, quadro), “come funziona” in tre punti, “inizia da qui” con tre card (tutorial, laboratorio, esercitazioni), piede con il logo CarraroLab |
 | **Tutorial guidato** | `tutorial.html` | chi parte da zero: una spiegazione alla volta, il punto da cliccare evidenziato |
 | **Laboratorio completo** | `laboratorio.html` | chi sa già e il docente: configuratore libero con tutte le funzioni |
 
@@ -141,6 +141,8 @@ un Meta Quest 3 simulato (libreria IWER di Meta) permette di mostrare alla class
 
 - `?modello=appartamento` · `?modello=motore` · `?modello=domotica` · `?modello=vuoto1f` · `?modello=vuoto3f` — apre
   direttamente un modello predefinito.
+- `?scheda=guide` (oppure `checks`, `props`) — apre il laboratorio con quella scheda del pannello destro già
+  selezionata (la card “Esercitazioni in classe” della homepage usa `?scheda=guide`).
 - Il progetto in corso viene salvato automaticamente nel browser; *Salva* / *Apri* usano file `.impianto.json`.
 
 ---

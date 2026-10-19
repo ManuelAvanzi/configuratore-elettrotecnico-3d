@@ -120,7 +120,9 @@ export class App extends Emitter {
     this.sim.on((e) => this.onSimEvent(e));
     this.onProjectChange({ type: 'load' });
     this.applySettings();
-    this.right?.show(this.project.meta.exercise?.id ? 'guide' : 'props');
+    // ?scheda=guide|checks|props apre direttamente una scheda del pannello destro (link dalla homepage)
+    const scheda = new URLSearchParams(location.search).get('scheda');
+    this.right?.show(scheda && this.right.panels[scheda] ? scheda : this.project.meta.exercise?.id ? 'guide' : 'props');
     this.goView('panoramica', 0);
     this.stage.onFrame((dt, t) => this.frame(dt, t / 1000));
 
