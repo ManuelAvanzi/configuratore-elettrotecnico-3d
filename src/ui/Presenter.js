@@ -131,7 +131,7 @@ export class Presenter {
       const plist = (def.params || []).filter((x) => !x.teacher).map((x) => {
         const v = prm[x.key];
         const o = x.options?.find((q) => (typeof q === 'object' ? q.value : q) === v);
-        return `${x.label}: ${o && typeof o === 'object' ? o.label : v}${x.unit && !(o && typeof o === 'object') ? ' ' + x.unit : ''}`;
+        return `${x.label}: ${o && typeof o === 'object' ? o.label : x.type === 'bool' ? (v ? 'sì' : 'no') : v}${x.unit && !(o && typeof o === 'object') ? ' ' + x.unit : ''}`;
       });
       appendAll(el,
         h('div', { class: 'muted', style: { fontFamily: 'var(--font-ui)', fontWeight: 800, letterSpacing: '.06em', fontSize: '11px' } }, mountLabel(c.mount).toUpperCase()),

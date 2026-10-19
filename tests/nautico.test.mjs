@@ -390,7 +390,7 @@ section('6. Gruppo di riserva: avviamento automatico quando il carico supera l�
 section('7. Modello “Centrale elettrica di bordo” e verifiche di centrale');
 {
   const t = rig(nave());
-  ok(t.p.sources().length === 2 && !t.p.supply(), 'il modello ha due gruppi e nessun arrivo linea');
+  ok(t.p.sources().length === 4 && t.p.sources().filter((c) => c.type === 'genset').length === 3 && !t.p.supply(), 'il modello ha tre gruppi, la presa di banchina e nessun arrivo linea');
   const sy = t.p.system();
   ok(sy.kind === 'genset' && sy.Vll === 440 && sy.f === 60 && sy.earth === 'IT', `sistema del progetto: ${sy.Vph}/${sy.Vll} V ${sy.f} Hz ${sy.earth}`);
   const res = t.checks();
@@ -416,6 +416,135 @@ section('7. Modello “Centrale elettrica di bordo” e verifiche di centrale');
   ok(po.supply() && po.sources().length === 1, 'un progetto senza sorgenti riceve l’arrivo linea di default');
   const bp = new Project(blankProject({ sys: '3F', source: 'none' }));
   ok(!bp.supply() && bp.sources().length === 0 && bp.components.some((c) => c.type === 'pebar'), 'progetto vuoto senza sorgente: solo il collettore di terra');
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────
+section('8. Presa di banchina: sequenza delle fasi, interblocco, trasferimento del carico, limite di potenza');
+{
+  const mk = (seq, trasf, Pmax = 50, motor = [7.5, 80, 32, 'C']) => board({
+    Sn: 50,
+    extra: (b) => {
+      b.add('XB1', 'shore', 'A5', { net: 'nave440', Pmax, seq, ctrl: true, trasf });
+      b.add('Q8', 'mcb4p', 'R1:4', { In: 80, curve: 'C', pdi: 6 });
+      b.wire('XB1:L1', 'Q8:1', 25);
+      b.wire('XB1:L2', 'Q8:3', 25);
+      b.wire('XB1:L3', 'Q8:5', 25);
+      b.wire('XB1:N', 'Q8:N1', 25);
+      b.wire('XB1:PE', 'PE:PE2', 16);
+      b.wire('Q8:2', 'Q1:2', 25);
+      b.wire('Q8:4', 'Q1:4', 25);
+      b.wire('Q8:6', 'Q1:6', 25);
+      b.wire('Q8:N2', 'Q1:N2', 25);
+      motorFeeder(b, ...motor);
+    },
+  });
+  const t = rig(mk('inversa', 'blackout'));
+  t.act('XB1', 'plug');
+  const rc1 = t.act('XB1', 'close');
+  ok(rc1?.level === 'error' && !t.inst('XB1').state.closed, 'sequenza delle fasi inversa: il controllo di sequenza blocca la chiusura');
+  t.p.setParam(t.id('XB1'), 'seq', 'diretta');
+  t.run(0.1);
+  t.act('XB1', 'close');
+  t.run(2.5);
+  const m = t.inst('M1').state;
+  ok(t.inst('XB1').state.closed && m.mode === 'run' && m.dir === 1, `sequenza corretta: nave alimentata dalla banchina, elica in marcia in senso diretto (${r1(t.V('M1:U1', 'M1:V1'))} V)`);
+  ok(t.sim.powerState().label === 'Alimentazione dalla banchina' && t.sim.powerState().on, `stato: ${t.sim.powerState().label}`);
+  // con il gruppo in servizio: interblocco a black-out
+  const t2 = rig(mk('diretta', 'blackout'));
+  t2.sim.setPower(true);
+  t2.run(0.3);
+  t2.act('XB1', 'plug');
+  const r2 = t2.act('XB1', 'close');
+  ok(r2?.level === 'warn' && !t2.inst('XB1').state.closed, 'trasferimento a black-out: con il gruppo chiuso la banchina non chiude');
+  t2.act('G1', 'open');
+  t2.run(0.1);
+  t2.act('XB1', 'close');
+  t2.run(2.5);
+  ok(t2.inst('XB1').state.closed && t2.V('M1:U1', 'M1:V1') > 400, 'aperto il gruppo, la banchina alimenta la nave');
+  // trasferimento in parallelo: nessuna interruzione
+  const t3 = rig(mk('diretta', 'parallelo'));
+  t3.sim.setPower(true);
+  t3.run(2.5);
+  t3.act('XB1', 'plug');
+  t3.act('XB1', 'close');
+  t3.run(0.5);
+  ok(t3.inst('XB1').state.closed && t3.inst('G1').state.closed && !t3.inst('G1').state.trip, 'trasferimento in parallelo: banchina e gruppo insieme sulla sbarra, senza intervento');
+  t3.act('G1', 'open');
+  t3.run(0.5);
+  ok(t3.inst('M1').state.mode === 'run' && t3.V('M1:U1', 'M1:V1') > 400, 'gruppo aperto: le utenze non hanno visto interruzioni');
+  // limite di potenza della banchina
+  const t4 = rig(mk('diretta', 'blackout', 20, [22, 100, 63, 'D']));
+  t4.act('XB1', 'plug');
+  t4.act('XB1', 'close');
+  t4.run(2.5);
+  const Psh = t4.inst('XB1').state.P;
+  t4.run(4);
+  ok(Psh > 20000 && t4.inst('XB1').state.trip === 'potenza di banchina superata' && !t4.inst('XB1').state.closed, `oltre i 20 kW disponibili (${(Psh / 1000).toFixed(1)} kW) la banchina si stacca`);
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────
+section('9. Black-out: UPS, gruppo di emergenza ad avviamento automatico, commutatore ATS');
+{
+  const t = rig(nave());
+  t.sim.setPower(true);
+  t.run(3);
+  const lit = () => (t.inst('E1').view.bright || 0) > 0.5;
+  ok(lit() && t.inst('M1').state.mode === 'run' && t.inst('M2').state.mode === 'run' && t.inst('KC1').state.src === 'normal' && t.inst('U1').state.mode === 'rete', 'navigazione: ATS sulla rete normale, UPS alimentato dalla rete, luci, elica e timoneria in servizio');
+  ok(!t.inst('G3').state.running, 'il gruppo di emergenza è fermo');
+  // black-out: si fermano entrambi i gruppi principali
+  t.act('G1', 'genStop');
+  t.act('G2', 'genStop');
+  t.run(0.3);
+  ok(t.inst('U1').state.mode === 'batteria' && lit(), 'black-out: le luci restano accese dalla batteria dell’UPS');
+  ok(t.inst('M1').state.mode !== 'run' && t.inst('M2').state.mode !== 'run', 'elica e timoneria si fermano (nessuna sorgente trifase)');
+  t.run(1.5);
+  ok(t.inst('G3').state.running, 'dopo un secondo il gruppo di emergenza si avvia da solo');
+  t.run(2.5);
+  ok(t.inst('G3').state.closed, 'il gruppo di emergenza chiude sulla sbarra di emergenza');
+  t.run(1.5);
+  ok(t.inst('KC1').state.src === 'emerg', 'il commutatore ATS passa sulla rete di emergenza');
+  t.run(3);
+  ok(t.inst('M2').state.mode === 'run' && t.inst('U1').state.mode === 'rete' && lit(), 'timoneria di nuovo in marcia, UPS in ricarica: alimentazione di emergenza ripristinata in meno di 45 s');
+  ok(t.inst('M1').state.mode !== 'run' && t.V('XS1:L', 'XS1:N') < 1, 'le utenze non essenziali (elica di manovra, cucina) restano senza tensione');
+  ok(t.events().some((e) => e.includes('BLACK-OUT')) && t.events().some((e) => e.includes('EMERGENZA')), 'eventi di black-out e di commutazione emessi');
+  // ritorno della rete normale
+  t.act('G1', 'genStart');
+  t.run(0.2);
+  t.act('G1', 'close');
+  t.run(11);
+  ok(t.inst('KC1').state.src === 'normal', 'rientro della rete normale: l’ATS torna sulla rete normale dopo il ritardo');
+  t.run(31);
+  ok(!t.inst('G3').state.running, 'il gruppo di emergenza si ferma da solo 30 s dopo il rientro');
+  ok(lit() && t.inst('M2').state.mode === 'run' && t.inst('M1').state.mode === 'run', 'tutte le utenze di nuovo in servizio sulla rete normale');
+}
+
+// ───────────────────────────────────────────────────────────────────────────────────
+section('10. Verifiche da registro navale');
+{
+  const t = rig(nave());
+  const res = t.checks();
+  const errs = res.filter((r) => r.level === 'error');
+  ok(!errs.length, 'modello di bordo completo: nessuna non conformità', errs.map((e) => e.title).join(' | '));
+  const pdi = res.filter((r) => r.id.startsWith('reg-pdi-'));
+  ok(pdi.length >= 8 && pdi.every((r) => r.level === 'ok'), `Icu ≥ Iac e Icm ≥ Ip verificati su ${pdi.length} interruttori`);
+  const ess = res.filter((r) => r.id.startsWith('reg-ess-'));
+  ok(ess.length === 3 && ess.every((r) => r.level === 'ok'), 'le tre utenze essenziali sono alimentate tramite ATS/UPS');
+  ok(res.some((r) => r.id.startsWith('reg-shore-') && r.level === 'ok'), 'controllo della sequenza delle fasi attivo sulla banchina');
+  ok(!res.some((r) => r.id === 'reg-emerg'), 'sorgente di emergenza presente');
+  ok(res.some((r) => r.group === 'nave'), 'le verifiche di bordo sono nel gruppo “Impianto di bordo (registri navali)”');
+  // una presa dichiarata essenziale ma sul quadro principale → avviso
+  t.p.setParam(t.id('XS1'), 'essenziale', true);
+  const r2 = t.checks();
+  ok(r2.some((r) => r.id === 'reg-ess-' + t.id('XS1') && r.level === 'warn'), 'utenza essenziale fuori dal quadro di emergenza: segnalata');
+  // senza gruppo di emergenza né UPS → avviso
+  const d = nave();
+  const drop = new Set(d.components.filter((c) => ['G3', 'U1'].includes(c.tag)).map((c) => c.id));
+  d.components = d.components.filter((c) => !drop.has(c.id));
+  d.wires = d.wires.filter((w) => !drop.has(w.a.c) && !drop.has(w.b.c));
+  const t3 = rig(d);
+  ok(t3.checks().some((r) => r.id === 'reg-emerg' && r.level === 'warn'), 'senza sorgente di emergenza la verifica avvisa');
+  // sistema del progetto e scorciatoia di alimentazione con la banchina presente
+  ok(t.p.sources().length === 4 && t.p.system().kind === 'genset', 'quattro sorgenti (tre gruppi e la banchina); il sistema resta quello dei gruppi');
 }
 
 console.log(`\n${pass} superati, ${fail} falliti`);

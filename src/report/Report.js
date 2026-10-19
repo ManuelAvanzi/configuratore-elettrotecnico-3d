@@ -22,7 +22,7 @@ function paramText(def, params) {
     .map((p) => {
       const v = params[p.key];
       const o = p.options?.find((q) => (typeof q === 'object' ? q.value : q) === v);
-      const val = o && typeof o === 'object' ? o.label.split(' — ')[0] : `${String(v).replace('.', ',')}${p.unit ? ' ' + p.unit : ''}`;
+      const val = o && typeof o === 'object' ? o.label.split(' — ')[0] : p.type === 'bool' ? (v ? 'sì' : 'no') : `${String(v).replace('.', ',')}${p.unit ? ' ' + p.unit : ''}`;
       return `${p.label}: ${val}`;
     })
     .join('; ');

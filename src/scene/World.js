@@ -12,6 +12,38 @@ import {
 import { LAYOUT, FIELD_ROWS } from '../core/layout.js';
 import { mergeStatic } from './merge.js';
 
+/** Lamiera mandorlata del ponte (sala quadri di bordo) */
+let deckMat = null;
+function deckMaterial() {
+  if (deckMat) return deckMat;
+  const c = makeCanvas(512, 512);
+  const g = c.getContext('2d');
+  g.fillStyle = '#5f6569';
+  g.fillRect(0, 0, 512, 512);
+  g.strokeStyle = 'rgba(255,255,255,0.18)';
+  g.lineWidth = 3;
+  for (let y = 0; y < 512; y += 64) {
+    for (let x = 0; x < 512; x += 64) {
+      const ox = (y / 64) % 2 ? 32 : 0;
+      g.beginPath();
+      g.moveTo(x + ox + 8, y + 32);
+      g.lineTo(x + ox + 32, y + 8);
+      g.stroke();
+      g.strokeStyle = 'rgba(0,0,0,0.25)';
+      g.beginPath();
+      g.moveTo(x + ox + 12, y + 36);
+      g.lineTo(x + ox + 36, y + 12);
+      g.stroke();
+      g.strokeStyle = 'rgba(255,255,255,0.18)';
+    }
+  }
+  const t = canvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(10, 10);
+  deckMat = new THREE.MeshStandardMaterial({ map: t, roughness: 0.55, metalness: 0.35 });
+  return deckMat;
+}
+
 // ── Quote del banco didattico ─────────────────────────────────────────────────────────
 export const CAB = {
   cx: -0.62, cy: 1.36, w: 0.6, h: 0.9, d: 0.21,
@@ -79,9 +111,11 @@ export class World {
     this.pickSurfaces = []; // guide e righe del pannello (posizionamento)
     this.teleportSurfaces = [];
     this.interactive = []; // parti cliccabili fisse (interruttore del contatore)
+    this.theme = 'aula'; // 'aula' (laboratorio scolastico) oppure 'nave' (sala quadri di bordo)
 
     this.buildRoom();
     this.buildCabinet();
+    this.buildEarthPit();
     this.buildMeterBox();
     this.buildFieldBoard();
     this.buildTrunking();
@@ -113,6 +147,41 @@ export class World {
     return this.wallPivot.scale.x;
   }
 
+  /**
+   * Cambia l'ambiente: aula-laboratorio oppure sala quadri di bordo. Quadro, pannello utenze e LIM restano gli
+   * stessi (le posizioni logiche non cambiano); si ricostruiscono stanza, arredi e contatore/comando centrale.
+   */
+  setTheme(theme) {
+    if (theme === this.theme) return;
+    this.theme = theme;
+    const kill = (grp) => {
+      if (!grp) return;
+      grp.traverse((o) => {
+        if (o.isMesh) o.geometry?.dispose();
+      });
+      grp.parent?.remove(grp);
+    };
+    const ti = this.teleportSurfaces.indexOf(this.floor);
+    if (ti >= 0) this.teleportSurfaces.splice(ti, 1);
+    const ii = this.interactive.indexOf(this.meterLever);
+    if (ii >= 0) this.interactive.splice(ii, 1);
+    kill(this.room);
+    kill(this.furniture);
+    kill(this.meter);
+    kill(this.meterCable);
+    this.buildRoom();
+    this.buildMeterBox();
+    this.buildFurniture();
+    for (const g of [this.room, this.furniture]) {
+      g.traverse((o) => {
+        if (o.isMesh) o.castShadow = false;
+      });
+      mergeStatic(g);
+    }
+    mergeStatic(this.meter);
+    this.updateEarth();
+  }
+
   /** Converte coordinate del banco in coordinate mondo */
   toWorld(v) {
     this.wallRoot.updateMatrixWorld(true);
@@ -121,6 +190,7 @@ export class World {
 
   // ── Aula ──────────────────────────────────────────────────────────────────────────
   buildRoom() {
+    if (this.theme === 'nave') return this.buildRoomNave();
     const g = new THREE.Group();
     g.name = 'room';
     const X0 = -3.6;
@@ -216,7 +286,14 @@ export class World {
       }
     }
 
-    // Striscia di sicurezza a pavimento davanti al banco
+    this.floorTape(g);
+    this.room = g;
+    this.root.add(g);
+    this.bounds = { x0: X0, x1: X1, z0: 0, z1: Z1, h: H };
+  }
+
+  /** Striscia di sicurezza gialla e nera a pavimento davanti al banco */
+  floorTape(g) {
     const c = makeCanvas(512, 32);
     const x2 = c.getContext('2d');
     x2.fillStyle = '#1b1b1b';
@@ -238,7 +315,98 @@ export class World {
     tape.position.set(0.15, 0.002, 1.35);
     tape.receiveShadow = true;
     g.add(tape);
+  }
 
+  /** Sala quadri di bordo: paratie in acciaio con rinforzi, ponte in lamiera mandorlata, oblò, tubazioni e passerelle cavi */
+  buildRoomNave() {
+    const g = new THREE.Group();
+    g.name = 'room';
+    const X0 = -3.6;
+    const X1 = 4.8;
+    const Z1 = 7.2;
+    const H = 2.6;
+    const W = X1 - X0;
+    const cx = (X0 + X1) / 2;
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, Z1), deckMaterial());
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(cx, 0, Z1 / 2);
+    floor.receiveShadow = true;
+    floor.userData.teleport = true;
+    g.add(floor);
+    this.teleportSurfaces.push(floor);
+    this.floor = floor;
+    const ceil = new THREE.Mesh(new THREE.PlaneGeometry(W, Z1), wallMaterial('#b7bdbf'));
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.set(cx, H, Z1 / 2);
+    g.add(ceil);
+    for (let z = 0.6; z < Z1; z += 1.2) box(W, 0.12, 0.08, MAT.industrialGrey, cx, H - 0.06, z, g); // bagli
+    // paratie
+    const wm = wallMaterial('#cfd5d3');
+    const back = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wm);
+    back.position.set(cx, H / 2, 0);
+    back.receiveShadow = true;
+    g.add(back);
+    const front = new THREE.Mesh(new THREE.PlaneGeometry(W, H), wm);
+    front.rotation.y = Math.PI;
+    front.position.set(cx, H / 2, Z1);
+    g.add(front);
+    const right = new THREE.Mesh(new THREE.PlaneGeometry(Z1, H), wm);
+    right.rotation.y = -Math.PI / 2;
+    right.position.set(X1, H / 2, Z1 / 2);
+    right.receiveShadow = true;
+    g.add(right);
+    const left = new THREE.Mesh(new THREE.PlaneGeometry(Z1, H), wm);
+    left.rotation.y = Math.PI / 2;
+    left.position.set(X0, H / 2, Z1 / 2);
+    left.receiveShadow = true;
+    g.add(left);
+    const stiff = MAT.industrialGrey;
+    for (const x of [-3.2, -2.5, 1.5, 2.3, 3.1, 3.9, 4.6]) box(0.08, H, 0.06, stiff, x, H / 2, 0.03, g);
+    for (let z = 0.8; z < Z1 - 0.3; z += 0.8) {
+      box(0.06, H, 0.08, stiff, X1 - 0.03, H / 2, z, g);
+      if (Math.abs(z - 1.9) > 0.5 && Math.abs(z - 3.6) > 0.5 && Math.abs(z - 5.3) > 0.5) box(0.06, H, 0.08, stiff, X0 + 0.03, H / 2, z, g);
+    }
+    // oblò
+    for (const z of [1.9, 3.6, 5.3]) {
+      const sky = new THREE.Mesh(new THREE.CircleGeometry(0.26, 32), new THREE.MeshBasicMaterial({ map: skyTexture(), toneMapped: false }));
+      sky.rotation.y = Math.PI / 2;
+      sky.position.set(X0 + 0.006, 1.75, z);
+      g.add(sky);
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.035, 12, 36), MAT.brass);
+      ring.rotation.y = Math.PI / 2;
+      ring.position.set(X0 + 0.03, 1.75, z);
+      g.add(ring);
+      for (let k = 0; k < 6; k++) {
+        const a = (k / 6) * Math.PI * 2;
+        const bolt = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.02, 8), MAT.brass);
+        bolt.rotation.z = Math.PI / 2;
+        bolt.position.set(X0 + 0.055, 1.75 + Math.sin(a) * 0.3, z + Math.cos(a) * 0.3);
+        g.add(bolt);
+      }
+    }
+    // tubazioni e passerella portacavi a soffitto
+    const pipe = (r, x, y, mat) => {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, Z1, 14), mat);
+      m.rotation.x = Math.PI / 2;
+      m.position.set(x, y, Z1 / 2);
+      g.add(m);
+    };
+    pipe(0.06, 1.3, H - 0.32, MAT.plasticMid);
+    pipe(0.04, 1.52, H - 0.3, MAT.plasticRed);
+    pipe(0.05, 2.9, H - 0.32, MAT.plasticBlue);
+    box(0.4, 0.04, Z1, MAT.galvanized, -2.4, H - 0.3, Z1 / 2, g);
+    for (let z = 0.3; z < Z1; z += 0.6) box(0.4, 0.06, 0.02, MAT.galvanized, -2.4, H - 0.28, z, g);
+    // plafoniere stagne con gabbia
+    const led = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff2dc, emissiveIntensity: 1.4, roughness: 0.4 });
+    for (const x of [-1.6, 0.6, 2.8]) {
+      for (const z of [1.6, 3.9, 6.0]) {
+        const p = box(0.36, 0.08, 0.14, led, x, H - 0.14, z, g);
+        p.renderOrder = 1;
+        box(0.4, 0.04, 0.18, MAT.industrialDark, x, H - 0.08, z, g);
+        for (const sx of [-0.12, 0, 0.12]) box(0.012, 0.1, 0.012, MAT.industrialDark, x + sx, H - 0.15, z + 0.08, g);
+      }
+    }
+    this.floorTape(g);
     this.room = g;
     this.root.add(g);
     this.bounds = { x0: X0, x1: X1, z0: 0, z1: Z1, h: H };
@@ -402,6 +570,7 @@ export class World {
 
   // ── Contatore del distributore ────────────────────────────────────────────────────
   buildMeterBox() {
+    const nave = this.theme === 'nave';
     const g = new THREE.Group();
     g.name = 'meter';
     g.position.set(-1.14, 1.5, 0);
@@ -418,7 +587,7 @@ export class World {
     const btnBase = rbox(0.06, 0.05, 0.02, 0.004, MAT.plasticDark, 0, -0.07, 0.1, g);
     void btnBase;
     const lever = rbox(0.036, 0.022, 0.018, 0.003, MAT.plasticRed, 0, -0.07, 0.115, g);
-    lever.userData = { compId: 'XA', action: 'power', hint: 'Interruttore del contatore: alimenta / scollega l’impianto' };
+    lever.userData = { compId: 'XA', action: 'power', hint: nave ? 'Comando della centrale: avvia / ferma i gruppi' : 'Interruttore del contatore: alimenta / scollega l’impianto' };
     this.meterLever = lever;
     this.interactive.push(lever);
     // targa
@@ -428,9 +597,9 @@ export class World {
     t2.fillRect(0, 0, 256, 64);
     t2.fillStyle = '#333';
     t2.font = '700 22px Manrope, Arial';
-    t2.fillText('CONTATORE', 12, 28);
+    t2.fillText(nave ? 'CENTRALE' : 'CONTATORE', 12, 28);
     t2.font = '500 17px Inter, Arial';
-    t2.fillText('Punto di consegna', 12, 52);
+    t2.fillText(nave ? 'Comando generatori' : 'Punto di consegna', 12, 52);
     const tp = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 0.03), new THREE.MeshStandardMaterial({ map: canvasTexture(tc), roughness: 0.6 }));
     tp.position.set(0, 0.125, 0.0905);
     g.add(tp);
@@ -446,11 +615,14 @@ export class World {
     ], false, 'centripetal');
     const cable = new THREE.Mesh(new THREE.TubeGeometry(curve, 64, 0.009, 10), new THREE.MeshStandardMaterial({ color: 0x3a3d42, roughness: 0.55 }));
     this.wallRoot.add(cable);
+    this.meterCable = cable;
     shadowAll(g);
     this.meter = g;
     this.wallRoot.add(g);
+  }
 
-    // Pozzetto del dispersore (in coordinate mondo, a pavimento)
+  /** Pozzetto del dispersore (in coordinate mondo, a pavimento) e conduttore di terra */
+  buildEarthPit() {
     const pit = new THREE.Group();
     box(0.3, 0.02, 0.3, MAT.plasticMid, 0, 0.01, 0, pit);
     const sc = makeCanvas(128, 128);
@@ -671,6 +843,7 @@ export class World {
 
   // ── Arredi ────────────────────────────────────────────────────────────────────────
   buildFurniture() {
+    if (this.theme === 'nave') return this.buildFurnitureNave();
     const g = new THREE.Group();
     const lam = laminateMaterial();
     const leg = MAT.plasticMid;
@@ -801,6 +974,98 @@ export class World {
     sign.position.set(-2.1, 2.2, 0.005);
     g.add(sign);
 
+    shadowAll(g, true, true);
+    this.furniture = g;
+    this.root.add(g);
+  }
+
+  /** Arredi della sala quadri di bordo: consolle, armadietti, salvagente, estintore, porta stagna, cartello */
+  buildFurnitureNave() {
+    const g = new THREE.Group();
+    const Z1 = this.bounds.z1;
+    // consolle di controllo della centrale
+    const con = new THREE.Group();
+    box(1.6, 0.9, 0.7, MAT.industrialDark, 0, 0.45, 0, con);
+    const top = box(1.6, 0.06, 0.5, MAT.industrialGrey, 0, 1.0, -0.15, con);
+    top.rotation.x = -0.35;
+    for (const sx of [-0.45, 0.15]) {
+      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.3), new THREE.MeshStandardMaterial({ color: 0x14202c, emissive: 0x2a5d3a, emissiveIntensity: 0.7 }));
+      scr.position.set(sx, 1.1, -0.1);
+      scr.rotation.x = -0.35;
+      con.add(scr);
+    }
+    for (let i = 0; i < 8; i++) box(0.05, 0.02, 0.05, i % 3 ? MAT.plasticDark : MAT.plasticRed, -0.7 + i * 0.08, 0.95, 0.15, con);
+    con.position.set(0.2, 0, 2.6);
+    g.add(con);
+    // armadietti in acciaio
+    for (const z of [0.5, 1.6]) {
+      const c = new THREE.Group();
+      box(1.0, 1.95, 0.45, MAT.steelCabinet, 0, 0.975, 0, c);
+      box(0.004, 1.85, 0.002, MAT.plasticMid, 0, 0.975, 0.226, c);
+      for (const sx of [-0.06, 0.06]) box(0.02, 0.18, 0.02, MAT.aluminium, sx, 1.05, 0.235, c);
+      c.position.set(-3.05, 0, z);
+      c.rotation.y = Math.PI / 2;
+      g.add(c);
+    }
+    // salvagente
+    const bg = new THREE.Group();
+    bg.add(new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.08, 12, 36), MAT.plasticOrange));
+    for (let k = 0; k < 4; k++) {
+      const s = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.085, 8, 36, 0.5), MAT.plasticWhite);
+      s.rotation.z = (k / 4) * Math.PI * 2;
+      bg.add(s);
+    }
+    bg.rotation.y = -Math.PI / 2;
+    bg.position.set(4.73, 1.6, 2.2);
+    g.add(bg);
+    // estintore
+    const ext = new THREE.Group();
+    const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.5, 20), MAT.plasticRed);
+    bottle.position.y = 0.25;
+    ext.add(bottle);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.05, 0.08, 12), MAT.plasticBlack);
+    head.position.y = 0.54;
+    ext.add(head);
+    ext.position.set(4.66, 0.9, 3.6);
+    g.add(ext);
+    // porta stagna con volantino
+    const door = new THREE.Group();
+    box(1.0, 1.9, 0.08, MAT.industrialGrey, 0, 1.25, 0, door);
+    for (const [w, h, x, y] of [[1.14, 0.07, 0, 2.235], [1.14, 0.07, 0, 0.265], [0.07, 2.04, -0.535, 1.25], [0.07, 2.04, 0.535, 1.25]]) box(w, h, 0.12, MAT.industrialDark, x, y, -0.01, door);
+    const wheel = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.02, 10, 28), MAT.aluminium);
+    wheel.position.set(0, 1.25, 0.08);
+    door.add(wheel);
+    for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3]) {
+      const sp = box(0.3, 0.02, 0.02, MAT.aluminium, 0, 1.25, 0.08, door);
+      sp.rotation.z = a;
+    }
+    door.position.set(2.4, 0, Z1 - 0.06);
+    g.add(door);
+    // cartello della sala quadri
+    const sc = makeCanvas(1024, 256);
+    const s2 = sc.getContext('2d');
+    s2.fillStyle = '#ffffff';
+    s2.fillRect(0, 0, 1024, 256);
+    s2.fillStyle = '#1d4e89';
+    s2.fillRect(0, 0, 220, 256);
+    s2.fillStyle = '#ffffff';
+    s2.beginPath();
+    s2.moveTo(110, 40);
+    s2.lineTo(70, 130);
+    s2.lineTo(100, 130);
+    s2.lineTo(80, 200);
+    s2.lineTo(150, 110);
+    s2.lineTo(118, 110);
+    s2.closePath();
+    s2.fill();
+    s2.fillStyle = '#111';
+    s2.font = '800 60px Manrope, Arial';
+    s2.fillText('CENTRALE ELETTRICA', 250, 110);
+    s2.font = '500 36px Inter, Arial';
+    s2.fillText('Sala quadri · sistema IT 440 V 60 Hz · personale autorizzato', 252, 180);
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.2), new THREE.MeshStandardMaterial({ map: canvasTexture(sc), roughness: 0.6 }));
+    sign.position.set(-2.1, 2.05, 0.07);
+    g.add(sign);
     shadowAll(g, true, true);
     this.furniture = g;
     this.root.add(g);

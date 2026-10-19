@@ -42,6 +42,39 @@ const SPECS = {
     };
   },
 
+  ats(def, p, comp) {
+    return {
+      led: { x: -0.018, y: 0.004, color: '#35d46a' },
+      paint(pt, d) {
+        tagBox(pt, comp.tag, 18.3, d.w);
+        pt.text('COMMUTATORE AUTOMATICO', 0, 11.5, 2.4, { weight: 800 });
+        pt.text('ATS', 0, 7.2, 3.4, { weight: 800, color: '#0f3d80' });
+        pt.rect(-24, 0, 26, 8, '#e4e5e1', 1);
+        pt.text('NORMALE', -24, -0.2, 2.2, { weight: 800, color: '#1c7a47' });
+        pt.rect(24, 0, 26, 8, '#e4e5e1', 1);
+        pt.text('EMERGENZA', 24, -0.2, 2.2, { weight: 800, color: '#b3262c' });
+        pt.text(`commuta dopo ${p.ritardo} s · ritorno ${p.ritorno} s`, 0, -7, 2, { weight: 600 });
+        pt.text('1-3-5-N1 · 7-9-11-N3  →  2-4-6-N2', 0, -11.5, 2, { weight: 700, color: '#333' });
+        pt.text('Quadro di emergenza', 0, -16, 2, { weight: 600, color: '#555' });
+      },
+    };
+  },
+
+  ups(def, p, comp) {
+    return {
+      led: { x: 0.012, y: 0.006, color: '#35d46a' },
+      paint(pt, d) {
+        tagBox(pt, comp.tag, 18.3, d.w);
+        pt.text('UPS', 0, 10.5, 4, { weight: 800, color: '#0f3d80' });
+        pt.text(`${p.Sn} kVA · ${p.aut} min`, 0, 5, 2.4, { weight: 700 });
+        pt.rect(0, -2, 30, 7, '#1d2227', 0.8);
+        pt.text('BATTERIA', 0, -2.4, 2.4, { weight: 700, color: '#7fe3a0' });
+        pt.text('1-N1 rete · 2-N2 uscita', 0, -9.5, 2, { weight: 700, color: '#333' });
+        pt.text('Gruppo di continuità', 0, -14.5, 2, { weight: 600, color: '#555' });
+      },
+    };
+  },
+
   kls(def, p, comp) {
     return {
       led: { x: 0.008, y: 0.005, color: '#ffb020' },

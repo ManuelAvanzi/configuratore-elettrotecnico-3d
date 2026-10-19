@@ -472,9 +472,9 @@ function gensetModel(def, p, comp, terms) {
   const panel = mesh(new RoundedBoxGeometry(0.05, 0.034, 0.008, 2, 0.002), MAT.plasticIvory, 0.06, -0.025, D - 0.004, g);
   const led = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.002, 12).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x113311, emissive: 0x22ff55, emissiveIntensity: 0 }), 0.078, -0.016, D + 0.0015, g);
   led.userData.dynamic = true;
-  const pl = new Painter(50, 34, '#ebe8df', 8);
+  const pl = new Painter(50, 34, p.emergenza ? '#f3d9c4' : '#ebe8df', 8);
   pl.text(comp.tag, -16, -8, 7, { weight: 800, color: '#111' });
-  pl.text(`${p.Sn} kVA`, 6, -8, 5, { weight: 800, color: '#0f3d80' });
+  pl.text(`${p.Sn} kVA`, 6, -8, 5, { weight: 800, color: p.emergenza ? '#b3262c' : '#0f3d80' });
   pl.text(p.net === 'nave690' ? '690 V 60 Hz' : p.net === 'it230' ? '400 V 50 Hz' : '440 V 60 Hz', 0, 4, 4.2, { weight: 700, color: '#222' });
   pl.text(`neutro ${p.earth}`, 0, 10.5, 3.6, { weight: 600, color: '#555' });
   const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032), new THREE.MeshStandardMaterial({ map: pl.texture(), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
@@ -502,9 +502,47 @@ function gensetModel(def, p, comp, terms) {
   };
 }
 
+// ── Presa di banchina (shore connection) ───────────────────────────────────────────
+function shoreModel(def, p, comp, terms) {
+  const g = new THREE.Group();
+  const z = wallBox(g);
+  // sportello con presa industriale e avvolgicavo
+  const sock = mesh(new THREE.CylinderGeometry(0.022, 0.024, 0.03, 20).rotateX(Math.PI / 2), MAT.plasticBlue, -0.02, 0.012, z + 0.012, g);
+  sock.castShadow = true;
+  for (let k = 0; k < 4; k++) {
+    const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+    mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.006, 8).rotateX(Math.PI / 2), MAT.brass, -0.02 + Math.cos(a) * 0.011, 0.012 + Math.sin(a) * 0.011, z + 0.029, g);
+  }
+  const reel = mesh(new THREE.TorusGeometry(0.018, 0.007, 10, 24), MAT.plasticDark, 0.028, -0.004, z + 0.012, g);
+  reel.castShadow = true;
+  const led = mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 0.002, 12).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x113311, emissive: 0x22ff55, emissiveIntensity: 0 }), 0.028, 0.024, z + 0.002, g);
+  led.userData.dynamic = true;
+  const pl = new Painter(60, 14, '#20252b', 8);
+  pl.text('BANCHINA', -8, -4.5, 5.2, { weight: 800, color: '#ffffff' });
+  pl.text(p.net === 'nave690' ? '690 V 60 Hz' : p.net === 'it230' ? '400 V 50 Hz' : '440 V 60 Hz', 0, 2.5, 3.6, { weight: 700, color: '#ff8a3d' });
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.014), new THREE.MeshStandardMaterial({ map: pl.texture(), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
+  lab.position.set(0, -0.03, z + 0.0005);
+  g.add(lab);
+  const strip = terminalStrip(terms, comp.tag, 0.085);
+  g.add(strip.group);
+  corrugated(g, 0, 0.073, 0.0425, 0.013);
+  return {
+    group: g,
+    terminals: strip.terminals,
+    parts: {},
+    interactive: [],
+    update(inst, dt, t) {
+      if (!inst) return;
+      const s = inst.state;
+      led.material.emissive.setHex(s.trip ? 0xff3322 : s.closed ? 0x22ff55 : 0xffb020);
+      setEmissive(led, s.trip ? (Math.sin(t * 8) > 0 ? 2.5 : 0.3) : s.closed ? 2.2 : s.plugged ? 1.5 : 0);
+    },
+  };
+}
+
 export function buildFieldModel(def, params, comp) {
   const terms = def.terminals(params);
-  const map = { lamp: lampModel, xs: socketModel, sa: switchModel, sd: switchModel, si: switchModel, sp: switchModel, ss: stationModel, pir: pirModel, hb: bellModel, m3: motorModel, genset: gensetModel };
+  const map = { lamp: lampModel, xs: socketModel, sa: switchModel, sd: switchModel, si: switchModel, sp: switchModel, ss: stationModel, pir: pirModel, hb: bellModel, m3: motorModel, genset: gensetModel, shore: shoreModel };
   const fn = map[def.type];
   const m = fn(def, params, comp, terms);
   m.type = def.type;

@@ -25,6 +25,7 @@ const ACTIONS = {
   close: { icon: 'plugzap', label: () => 'Chiudi sulla sbarra' },
   open: { icon: 'unplug', label: () => 'Apri l’interruttore' },
   resetTrip: { icon: 'reset', label: () => 'Ripristina protezione' },
+  plug: { icon: 'plug', label: (s) => (s.plugged ? 'Scollega il cavo' : 'Collega il cavo di banchina') },
 };
 
 export class RightPanel {

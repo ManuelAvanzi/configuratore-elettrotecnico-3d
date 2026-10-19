@@ -145,6 +145,8 @@ export class App extends Emitter {
   onProjectChange(d = {}) {
     this.view.sync();
     this.sim.sync(this.project.data, (w) => this.project.electricalLength(w));
+    // sala quadri di bordo quando l'energia viene dai gruppi elettrogeni, aula-laboratorio con l'arrivo linea
+    this.world.setTheme(this.project.system().kind === 'genset' ? 'nave' : 'aula');
     this.picker.invalidate();
     if (this.selection?.comp && !this.project.comp(this.selection.comp)) this.selection = null;
     if (this.selection?.wire && !this.project.wire(this.selection.wire)) this.selection = null;

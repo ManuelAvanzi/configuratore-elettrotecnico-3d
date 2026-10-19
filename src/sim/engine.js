@@ -69,7 +69,7 @@ export class Simulator {
     for (const id of [...this.inst.keys()]) if (!seen.has(id)) this.inst.delete(id);
     // sistema di rete (tensione, frequenza, messa a terra) dichiarato dalla sorgente principale
     this.sourceIds = [...this.inst.values()].filter((i) => i.def.source).map((i) => i.id);
-    const main = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply')) || this.inst.get(this.sourceIds[0]);
+    const main = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply')) || this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'genset')) || this.inst.get(this.sourceIds[0]);
     const sys = main?.def.system ? main.def.system(main.params) : { ...DEFAULT_SYS };
     this.env.sys = { ...DEFAULT_SYS, ...sys, fBus: sys.f };
     this.wires = project.wires.map((w) => ({ id: w.id, a: w.a, b: w.b, section: w.section, fault: w.fault, len: this.lengthOf(w) }));
@@ -234,6 +234,18 @@ export class Simulator {
     return g > 0 ? 1 / g : Infinity;
   }
 
+  /** C'è un'altra sorgente in servizio (per l'avviamento automatico del gruppo di emergenza)? */
+  anyOtherSourceLive(exceptId) {
+    for (const id of this.sourceIds) {
+      if (id === exceptId) continue;
+      const inst = this.inst.get(id);
+      const s = inst.state;
+      const live = inst.type === 'supply' ? s.on && !s.limiter : inst.type === 'shore' ? s.closed : s.running && s.closed;
+      if (live) return true;
+    }
+    return false;
+  }
+
   /** Accende/spegne tutte le sorgenti (arrivo linea: contatore; gruppi: avvio + sincronizzazione + chiusura) */
   setPower(on, { settle = true } = {}) {
     for (const id of this.sourceIds) {
@@ -252,7 +264,12 @@ export class Simulator {
       return { kind: 'supply', on: s.on && !s.limiter, fault: s.limiter, P: s.P, kWh: s.kWh, I: s.I, V: this.mainVoltage(), label: s.limiter ? 'Contatore distaccato' : s.on ? 'Impianto alimentato' : 'Impianto non alimentato', action: s.limiter ? 'Riarma contatore' : s.on ? 'Scollega impianto' : 'Alimenta impianto' };
     }
     const gens = this.sourceIds.map((id) => this.inst.get(id)).filter((i) => i.type === 'genset');
-    if (!gens.length) return { kind: 'none', on: false, fault: false, P: 0, kWh: 0, I: [0, 0, 0], V: 0, label: 'Nessuna sorgente', action: 'Alimenta impianto' };
+    const shores = this.sourceIds.map((id) => this.inst.get(id)).filter((i) => i.type === 'shore' && i.state.closed);
+    if (!gens.length && !shores.length) return { kind: 'none', on: false, fault: false, P: 0, kWh: 0, I: [0, 0, 0], V: 0, label: 'Nessuna sorgente', action: 'Alimenta impianto' };
+    if (!gens.some((g) => g.state.running && g.state.closed) && shores.length) {
+      const sh = shores[0].state;
+      return { kind: 'genset', on: true, fault: false, P: sh.P, kWh: sh.kWh, I: sh.I, V: this.mainVoltage(), label: 'Alimentazione dalla banchina', action: 'Avvia la centrale', fBus: this.env.sys.fBus };
+    }
     const live = gens.filter((g) => g.state.running && g.state.closed);
     const fault = gens.some((g) => g.state.trip);
     const I = [0, 1, 2].map((k) => live.reduce((m, g) => Math.max(m, g.state.I?.[k] || 0), 0));

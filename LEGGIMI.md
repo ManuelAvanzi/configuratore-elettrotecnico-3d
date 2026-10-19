@@ -88,8 +88,17 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   dell'isolamento** (misura con il metodo dell'iniezione, allarme sotto soglia, contatto 11-14), **relè di
   distacco carichi** (per carico o per frequenza), verifiche di centrale (potenza installata, riserva n−1,
   controllo isolamento obbligatorio in IT). Modello predefinito “Centrale elettrica di bordo” (`?modello=nave`).
-  Cavi fino a 120 mm², motori fino a 75 kW, interruttori modulari fino a 125 A. La proposta completa dei moduli
-  nautico e media tensione è in [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
+  Cavi fino a 120 mm², motori fino a 75 kW, interruttori modulari fino a 125 A.
+- **Impianti di bordo, fase A2**: **sala quadri di bordo** in 3D (paratie in acciaio con rinforzi, ponte in lamiera
+  mandorlata, oblò, tubazioni e passerelle cavi, consolle, porta stagna, salvagente) che compare da sola quando
+  l'energia viene dai gruppi; **presa di banchina** (shore connection) con controllo della sequenza delle fasi,
+  interblocco a black-out o trasferimento in parallelo, limite di potenza della banchina; **gruppo di emergenza**
+  ad avviamento automatico al black-out (si ferma 30 s dopo il rientro); **commutatore automatico ATS** (rete
+  normale / rete di emergenza) e **UPS** monofase con batteria per luci e strumenti; utenze marcate **essenziali**;
+  verifiche “Impianto di bordo (registri navali)”: Icu ≥ Iac e Icm ≥ Ip senza back-up, utenze essenziali
+  alimentate tramite ATS/UPS, presenza di una sorgente di emergenza, controllo di sequenza sulla banchina.
+  La proposta completa dei moduli nautico e media tensione è in
+  [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
 
 Le 4 fasi della scheda del laboratorio corrispondono a: *Modelli predefiniti* (Fase 1 — introduzione al
 configuratore) → configurazione e cablaggio, anche in VR (Fase 2) → *analisi dei parametri guidata dal docente*
@@ -116,7 +125,7 @@ Poi apri <http://localhost:5190> (homepage).
 | `npm run build` | versione da pubblicare nella cartella `dist/` (sito statico con le tre pagine) |
 | `npm run preview` | prova locale della versione `dist/` |
 | `npm run pubblica` | pubblica il sito su GitHub Pages (ramo `gh-pages`) |
-| `npm test` | tutti i collaudi: simulatore e verifiche (68 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) + modulo nautico (66 prove) |
+| `npm test` | tutti i collaudi: simulatore e verifiche (69 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) + modulo nautico (96 prove) |
 
 ### Provarlo sul visore (Meta Quest)
 
@@ -155,9 +164,12 @@ un Meta Quest 3 simulato (libreria IWER di Meta) permette di mostrare alla class
   direttamente un modello predefinito.
 - `?scheda=guide` (oppure `checks`, `props`) — apre il laboratorio con quella scheda del pannello destro già
   selezionata (la card “Esercitazioni in classe” della homepage usa `?scheda=guide`).
-- `?modello=nave` — la centrale elettrica di bordo: due gruppi da 50 kVA a 440 V 60 Hz, neutro isolato. Il
-  pulsante “Avvia la centrale” avvia, sincronizza e mette in parallelo tutti i gruppi; dal pannello Proprietà di
-  ogni gruppo si fanno le singole manovre (avvia, sincronizza, chiudi, apri, ripristina).
+- `?modello=nave` — la centrale elettrica di bordo: due gruppi da 50 kVA a 440 V 60 Hz con neutro isolato, presa
+  di banchina, gruppo di emergenza da 30 kVA con ATS e UPS, timoneria e luci di navigazione essenziali, elica di
+  manovra e cucina non essenziali. Il pulsante “Avvia la centrale” avvia, sincronizza e mette in parallelo i gruppi
+  principali (non quello di emergenza, che parte solo al black-out); dal pannello Proprietà di ogni gruppo si
+  fanno le singole manovre (avvia, sincronizza, chiudi, apri, ripristina) e dalla presa di banchina si collega il
+  cavo e si chiude l'interruttore. Prova del black-out: ferma i due gruppi e guarda UPS, gruppo di emergenza e ATS.
 - Il progetto in corso viene salvato automaticamente nel browser; *Salva* / *Apri* usano file `.impianto.json`.
 
 ---
@@ -174,9 +186,11 @@ src/
   tutorial/      lezioni (lessons.js), regia dei passi (Tutorial.js), segnaposti 3D (Markers.js), pannello (CoachUI.js)
   sim/           simulatore: numeri complessi, risolutore MNA, motore degli eventi, tabelle normative, verifiche
   catalog/defs/  definizione elettrica dei componenti (parametri, morsetti, elementi di circuito, logiche);
-                 nautico.js = gruppo elettrogeno, controllo isolamento, relè di distacco carichi
+                 nautico.js = gruppo elettrogeno (anche di riserva e di emergenza), controllo isolamento,
+                 relè di distacco carichi, presa di banchina, commutatore ATS, UPS
   models/        modelli 3D procedurali (DIN modulari e industriali, dispositivi di campo, serigrafie)
-  scene/         palcoscenico, aula e banco, instradamento cavi, vista del progetto, copertine, ottimizzazione
+  scene/         palcoscenico, aula e banco (World.js: tema 'aula' o 'nave' con setTheme), instradamento cavi,
+                 vista del progetto, copertine, ottimizzazione
   interaction/   puntamento, strumenti (seleziona, cabla, misura, posiziona), mouse e tastiera
   ui/            interfaccia: barra, libreria, proprietà, verifiche, esercitazioni, LIM, presentazione
   xr/            realtà virtuale: sessione, controller, teletrasporto, tablet su canvas
@@ -190,7 +204,8 @@ public/img/      immagini della homepage e copertine delle lezioni (ricavate dal
                  19/10/2026), non fotografie reali: la homepage lo dichiara nella didascalia dell'hero
 tests/           collaudo in Node: simulatore (sim.test.mjs), lezioni del tutorial (lessons.test.mjs),
                  esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove),
-                 modulo nautico (nautico.test.mjs: sistema 440 V, IT, gruppi, parallelo, isola, distacco carichi)
+                 modulo nautico (nautico.test.mjs: sistema 440 V, IT, gruppi, parallelo, isola, distacco carichi,
+                 banchina, black-out con UPS/emergenza/ATS, verifiche da registro)
 ```
 
 La parte elettrica (`src/sim`, `src/catalog/defs`, `src/core`) non dipende da Three.js: si collauda in Node e si può
@@ -257,7 +272,11 @@ La homepage e l'elenco delle lezioni del tutorial si aggiornano da soli.
   corrente di circolazione che fa intervenire la sua protezione. Ripartizione del carico in proporzione a Sn
   (impedenze interne). Protezioni di generatore semplificate: cortocircuito oltre 3 In con ritardo 0,3 s
   (0,1 s se chiuso fuori fase), sovraccarico a tempo inverso con 1,5 In → ~2 min, inversione di potenza oltre
-  l'8 % di Pn per 2 s.
+  l'8 % di Pn per 2 s. Gruppo di emergenza: parte 1 s dopo che nessun'altra sorgente è in servizio, chiude dopo
+  altri 2 s, si ferma 30 s dopo il rientro. Presa di banchina: sorgente trifase con l'impedenza della banchina e
+  la sequenza delle fasi scelta; l'interblocco e il controllo di sequenza sono regole della manovra. ATS: commuta
+  sull'ingresso di emergenza quando il normale scende sotto il 70 % della tensione nominale (ritardo impostabile).
+  UPS: passante da rete; da batteria è una sorgente monofase con autonomia proporzionale al carico.
 - Resistività del rame a 70 °C (0,0214 Ω·mm²/m). Portate Iz: CEI-UNEL 35024/1, posa B1, PVC, 30 °C.
 - Curve di intervento **didattiche** (non di catalogo): magnetico a soglia fissa (B 4·In, C 7,5·In, D 15·In),
   termico a tempo inverso; limitatore del contatore oltre il 10% dopo alcuni secondi. La simulazione si può

@@ -99,6 +99,7 @@ export const CHECK_GROUPS = [
   { id: 'dimensionamento', label: 'Dimensionamento e coordinamento' },
   { id: 'conformita', label: 'Regola dell’arte' },
   { id: 'esercizio', label: 'Esercizio e carichi' },
+  { id: 'nave', label: 'Impianto di bordo (registri navali)' },
 ];
 
 export function runChecks(project, sim) {
@@ -273,7 +274,7 @@ export function runChecks(project, sim) {
 
     if (!overcurrent(x) || !wiredOut) continue;
     // Cavi protetti: a valle fino alla protezione successiva
-    const stopAtOC = (e) => !(e.kind === 'path' && (e.comp === x.c.id || overcurrent(g.byId.get(e.comp))));
+    const stopAtOC = (e) => !(e.kind === 'path' && (e.comp === x.c.id || overcurrent(g.byId.get(e.comp)) || g.byId.get(e.comp)?.def.barrier));
     const prot = bfs(g, loadSide, stopAtOC);
     const wires = new Set();
     for (const n of prot.seen) for (const e of g.adj.get(n) || []) if (e.kind === 'wire' && prot.seen.has(e.to)) wires.add(e.id);
@@ -347,7 +348,7 @@ export function runChecks(project, sim) {
     if (instLoads.length) {
       push({
         id: 'gen-cap',
-        group: 'esercizio',
+        group: 'nave',
         level: Sload > SnTot ? 'error' : Sload > 0.9 * SnTot ? 'warn' : 'ok',
         title: 'Potenza installata e potenza dei generatori',
         detail: `Utenze ${fmtW(Sload).replace('W', 'VA')} contro ${fmtW(SnTot).replace('W', 'VA')} di generatori (${gensets.length} grupp${gensets.length === 1 ? 'o' : 'i'}). ${Sload > SnTot ? 'Con tutti i carichi accesi la centrale è in sovraccarico.' : Sload > 0.9 * SnTot ? 'Margine scarso: i generatori lavorano al meglio attorno al 75 %.' : 'Il punto di lavoro ottimale dei generatori è attorno al 75 % della potenza nominale.'}`,
@@ -357,15 +358,41 @@ export function runChecks(project, sim) {
         const rest = SnTot - SnMax;
         push({
           id: 'gen-n1',
-          group: 'esercizio',
+          group: 'nave',
           level: Sload > rest ? 'warn' : 'ok',
           title: 'Riserva con un gruppo in avaria (n−1)',
           detail: `Con il gruppo più grande fuori servizio restano ${fmtW(rest).replace('W', 'VA')}: ${Sload > rest ? 'non bastano per tutte le utenze — servono il distacco dei carichi non essenziali o più potenza installata.' : 'sufficienti per tutte le utenze.'}`,
           comps: gensets.map((c) => c.id),
         });
       } else {
-        push({ id: 'gen-n1', group: 'esercizio', level: 'warn', title: 'Un solo gruppo: nessuna riserva', detail: 'A bordo la continuità di servizio richiede almeno due gruppi (o un gruppo di emergenza) per i carichi essenziali.', comps: gensets.map((c) => c.id) });
+        push({ id: 'gen-n1', group: 'nave', level: 'warn', title: 'Un solo gruppo: nessuna riserva', detail: 'A bordo la continuità di servizio richiede almeno due gruppi (o un gruppo di emergenza) per i carichi essenziali.', comps: gensets.map((c) => c.id) });
       }
+    }
+
+    // potere di interruzione e di chiusura rispetto al cortocircuito dei generatori (IEC 61363 semplificata):
+    // Icu ≥ Iac(T/2), Icm ≥ Ip con fattore di picco 1,7; i registri non ammettono la protezione di back-up
+    const Iac = sp.Icc;
+    const Ip = Iac * 1.7;
+    for (const x of protections) {
+      if (!x.prot.pdi || !project.wires.some((w) => w.a.c === x.c.id || w.b.c === x.c.id)) continue;
+      const n = x.prot.pdi <= 6 ? 1.5 : x.prot.pdi <= 10 ? 1.7 : 2;
+      const Icm = x.prot.pdi * n;
+      const okI = x.prot.pdi >= Iac;
+      const okM = Icm >= Ip;
+      push({ id: 'reg-pdi-' + x.c.id, group: 'nave', level: okI && okM ? 'ok' : 'error', title: `${x.c.tag}: Icu ≥ Iac e Icm ≥ Ip`, detail: `Cortocircuito dei generatori ${fmt(Iac, 2)} kA, picco ≈ ${fmt(Ip, 2)} kA (fattore 1,7); Icu = ${x.prot.pdi} kA, Icm ≈ ${fmt(Icm, 1)} kA (n = ${n}). ${okI && okM ? 'Verificato per il singolo apparecchio: i registri non ammettono la protezione di back-up.' : 'Insufficiente: scegli un potere di interruzione maggiore.'}`, comps: [x.c.id] });
+    }
+
+    // utenze essenziali: alimentazione di emergenza tramite ATS/UPS, presenza di una sorgente di emergenza
+    const ess = loads.filter((l) => l.p.essenziale && project.wires.some((w) => w.a.c === l.c.id || w.b.c === l.c.id));
+    const hasEmerg = gensets.some((c) => resolveParams(DEFS.genset, c.params).emergenza) || g.comps.some((x) => x.def.type === 'ups');
+    for (const l of ess) {
+      const chain = chains.get(l.c.id) || [];
+      const viaEm = chain.some((id) => ['ats', 'ups'].includes(g.byId.get(id)?.def.type));
+      push({ id: 'reg-ess-' + l.c.id, group: 'nave', level: viaEm ? 'ok' : 'warn', title: `${l.c.tag}: utenza essenziale ${viaEm ? 'con' : 'senza'} alimentazione di emergenza`, detail: viaEm ? 'Alimentata attraverso il commutatore automatico (ATS) o l’UPS: resta in servizio al black-out.' : 'Le utenze essenziali (timoneria, pompe, luci di navigazione) vanno alimentate dal quadro di emergenza tramite commutatore automatico (ATS) o UPS.', comps: [l.c.id] });
+    }
+    if (ess.length && !hasEmerg) push({ id: 'reg-emerg', group: 'nave', level: 'warn', title: 'Nessuna sorgente di emergenza', detail: 'Ci sono utenze essenziali ma nessun gruppo di emergenza ad avviamento automatico né UPS: al black-out restano senza alimentazione (SOLAS: alimentazione di emergenza entro 45 s).' });
+    for (const sh of g.comps.filter((x) => x.def.type === 'shore')) {
+      push({ id: 'reg-shore-' + sh.c.id, group: 'nave', level: sh.p.ctrl ? 'ok' : 'warn', title: `${sh.c.tag}: controllo della sequenza delle fasi`, detail: sh.p.ctrl ? 'Attivo: l’interruttore di banchina non chiude con la sequenza inversa.' : 'Disattivato: con la sequenza inversa i motori di bordo girerebbero al contrario.', comps: [sh.c.id] });
     }
   }
 

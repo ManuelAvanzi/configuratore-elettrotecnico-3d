@@ -46,56 +46,102 @@ export const PRESETS = [
   {
     id: 'nave',
     title: 'Centrale elettrica di bordo',
-    text: 'Due gruppi diesel-generatore da 50 kVA a 440 V 60 Hz con neutro isolato (IT), controllo dell’isolamento, distacco dei carichi non essenziali, elica di manovra e utenze di bordo.',
+    text: 'Due gruppi da 50 kVA a 440 V 60 Hz con neutro isolato (IT), presa di banchina, gruppo di emergenza con commutatore automatico e UPS, distacco dei carichi non essenziali, elica di manovra e luci di navigazione.',
     icon: 'waves',
     make: nave,
   },
 ];
 
-/** Impianto di bordo di uno yacht: due gruppi in parallelo, sistema IT, carichi essenziali e non */
+/** Impianto di bordo di uno yacht: due gruppi in parallelo, sistema IT, banchina, emergenza con ATS e UPS */
 export function nave() {
-  return build({ sys: '3F', source: 'none', title: 'Centrale elettrica di bordo', description: 'Yacht con due gruppi diesel-generatore da 50 kVA a 440 V 60 Hz, neutro isolato (IT) con controllo dell’isolamento, quadro principale con distacco automatico dei carichi non essenziali (cucina, aria condizionata). Carichi essenziali: elica di manovra e luci di navigazione.' }, (b) => {
+  return build({ sys: '3F', source: 'none', title: 'Centrale elettrica di bordo', description: 'Yacht con due gruppi diesel-generatore da 50 kVA a 440 V 60 Hz, neutro isolato (IT) con controllo dell’isolamento, presa di banchina per il porto, gruppo di emergenza da 20 kVA con commutatore automatico (ATS) e UPS per le utenze essenziali (elica di manovra, luci di navigazione), distacco automatico dei carichi non essenziali (cucina, aria condizionata).' }, (b) => {
+    // generazione
     b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo principale: 50 kVA, 440 V 60 Hz, neutro isolato.');
     b.add('G2', 'genset', 'A3', { Sn: 50, net: 'nave440', earth: 'IT', auto: true, standby: true }, 'Gruppo di riserva: parte da solo quando il primo supera l’85 %.');
+    b.add('XB1', 'shore', 'A5', { net: 'nave440', Pmax: 50, seq: 'diretta', ctrl: true, trasf: 'blackout' }, 'Presa di banchina: in porto si spengono i diesel.');
+    b.add('G3', 'genset', 'C3', { Sn: 30, net: 'nave440', earth: 'IT', auto: true, emergenza: true }, 'Gruppo di emergenza sul ponte alto: parte da solo al black-out e alimenta timoneria e luci.');
+    // quadro principale (guida 1)
     b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 }, 'Arrivo G1: In 80 A per i 66 A nominali del gruppo, cavi da 25 mm².');
     b.add('Q2', 'mcb4p', 'R1:4', { In: 80, curve: 'C', pdi: 6 }, 'Arrivo G2.');
     b.add('KI1', 'imd', 'R1:8', { soglia: 50 }, 'Obbligatorio con il neutro isolato: segnala il primo guasto a terra.');
     b.add('KL1', 'kls', 'R1:11', { soglia: 90, ritardo: 1 }, 'Stacca cucina e aria condizionata quando la centrale supera il 90 %.');
-    b.add('Q3', 'mcb3p', 'R2:0', { In: 32, curve: 'C', pdi: 6 }, 'Elica di manovra 7,5 kW: In 13 A, spunto ≈ 80 A sotto la soglia magnetica (240 A).');
-    b.add('Q4', 'mcb1pn', 'R2:3', { In: 10, curve: 'C', pdi: 6 }, 'Luci di navigazione (essenziali, sempre alimentate).');
+    // partenze (guida 2)
+    b.add('Q3', 'mcb3p', 'R2:0', { In: 32, curve: 'C', pdi: 6 }, 'Elica di manovra 7,5 kW (non essenziale): In 13 A, spunto ≈ 80 A sotto la soglia magnetica (240 A).');
+    b.add('Q4', 'mcb1pn', 'R2:3', { In: 10, curve: 'C', pdi: 6 }, 'Luci di navigazione (essenziali) a valle dell’UPS.');
     b.add('Q5', 'mcb1pn', 'R2:5', { In: 16, curve: 'C', pdi: 6 }, 'Cucina: non essenziale, a valle del distacco carichi.');
     b.add('Q6', 'mcb1pn', 'R2:7', { In: 16, curve: 'C', pdi: 6 }, 'Aria condizionata: non essenziale, a valle del distacco carichi.');
-    b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 }, 'Elica trasversale di manovra (bow thruster).');
-    b.add('E1', 'lamp', 'B3', { lt: 'led15' }, 'Luci di navigazione (essenziali).');
-    b.add('E2', 'lamp', 'B4', { lt: 'led10' });
+    b.add('Q9', 'mcb1pn', 'R2:9', { In: 10, curve: 'C', pdi: 6 }, 'Protezione dell’UPS.');
+    b.add('Q10', 'mcb3p', 'R2:11', { In: 16, curve: 'C', pdi: 6 }, 'Timoneria (essenziale) a valle del commutatore ATS.');
+    // quadro di emergenza (guida 3)
+    b.add('KC1', 'ats', 'R3:0', { ritardo: 1, ritorno: 10 }, 'Commutatore automatico: normale dal quadro principale, emergenza dal gruppo G3.');
+    b.add('U1', 'ups', 'R3:8', { Sn: 1, aut: 10 }, 'Copre i secondi di avviamento del gruppo di emergenza (luci e strumenti).');
+    b.add('Q7', 'mcb4p', 'R3:14', { In: 40, curve: 'C', pdi: 6 }, 'Arrivo del gruppo di emergenza (In 39 A).');
+    b.add('Q8', 'mcb4p', 'R3:18', { In: 80, curve: 'C', pdi: 6 }, 'Interruttore di banchina.');
+    // utenze
+    b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 }, 'Elica trasversale di manovra (bow thruster): serve solo in porto, non è essenziale.');
+    b.add('M2', 'm3', 'B3', { P: 4, conn: 'Y', load: 70, essenziale: true }, 'Motore della timoneria: essenziale, alimentato dal quadro di emergenza.');
+    b.add('E1', 'lamp', 'B5', { lt: 'led15', essenziale: true }, 'Luci di navigazione (essenziali).');
+    b.add('E2', 'lamp', 'C5', { lt: 'led10', essenziale: true });
     b.add('XS1', 'xs', 'C1', { carico: 'oven', tipo: 'sch' }, 'Cucina: utenza non essenziale.');
     b.add('XS2', 'xs', 'C2', { carico: 'aircon', tipo: 'sch' }, 'Aria condizionata: non essenziale.');
-    // arrivi dei generatori
-    for (const [G, Q] of [['G1', 'Q1'], ['G2', 'Q2']]) {
+    // arrivi dei generatori e della banchina (25 mm², protetti dai propri interruttori da 80 A)
+    for (const [G, Q] of [['G1', 'Q1'], ['G2', 'Q2'], ['XB1', 'Q8']]) {
       b.wire(`${G}:L1`, `${Q}:1`, 25);
       b.wire(`${G}:L2`, `${Q}:3`, 25);
       b.wire(`${G}:L3`, `${Q}:5`, 25);
       b.wire(`${G}:N`, `${Q}:N1`, 25);
     }
+    for (const [G, Q] of [['G3', 'Q7']]) {
+      b.wire(`${G}:L1`, `${Q}:1`, 10);
+      b.wire(`${G}:L2`, `${Q}:3`, 10);
+      b.wire(`${G}:L3`, `${Q}:5`, 10);
+      b.wire(`${G}:N`, `${Q}:N1`, 10);
+    }
     b.wire('G1:PE', 'PE:PE1', 16);
     b.wire('G2:PE', 'PE:PE2', 16);
-    // sbarra principale: uscite dei due arrivi in parallelo, poi le partenze a catena
+    b.wire('G3:PE', 'PE:PE7', 10);
+    b.wire('XB1:PE', 'PE:PE8', 16);
+    // sbarra principale: arrivi in parallelo, poi a catena verso il commutatore ATS (ingresso normale) e il distacco carichi
     b.wire('Q1:2', 'Q2:2', 25);
     b.wire('Q1:4', 'Q2:4', 25);
     b.wire('Q1:6', 'Q2:6', 25);
     b.wire('Q1:N2', 'Q2:N2', 25);
-    // (a monte delle partenze i cavi sono protetti solo dagli arrivi da 80 A: sezione 25 mm²)
-    b.wire('Q2:2', 'Q3:1', 25);
-    b.wire('Q2:4', 'Q3:3', 25);
-    b.wire('Q2:6', 'Q3:5', 25);
-    b.wire('Q3:1', 'Q4:1', 25);
+    b.wire('Q2:2', 'Q8:2', 25);
+    b.wire('Q2:4', 'Q8:4', 25);
+    b.wire('Q2:6', 'Q8:6', 25);
+    b.wire('Q2:N2', 'Q8:N2', 25);
+    b.wire('Q8:2', 'KC1:1', 25);
+    b.wire('Q8:4', 'KC1:3', 25);
+    b.wire('Q8:6', 'KC1:5', 25);
+    b.wire('Q8:N2', 'KC1:N1', 25);
+    b.wire('KC1:1', 'Q3:1', 25);
+    b.wire('KC1:3', 'Q3:3', 25);
+    b.wire('KC1:5', 'Q3:5', 25);
     b.wire('Q3:3', 'KL1:11', 25);
     b.wire('KL1:12', 'Q5:1', 25);
     b.wire('Q5:1', 'Q6:1', 25);
-    b.wire('Q2:N2', 'Q4:N1', 25);
-    b.wire('Q4:N1', 'Q5:N1', 25);
+    b.wire('KC1:N1', 'Q5:N1', 25);
     b.wire('Q5:N1', 'Q6:N1', 25);
-    // ausiliari alimentati dalla linea luci (10 A): controllo isolamento e relè di distacco
+    // sbarra di emergenza: gruppo G3 → Q7 → ingresso di emergenza dell'ATS
+    b.wire('Q7:2', 'KC1:7', 10);
+    b.wire('Q7:4', 'KC1:9', 10);
+    b.wire('Q7:6', 'KC1:11', 10);
+    b.wire('Q7:N2', 'KC1:N3', 10);
+    // uscita dell'ATS (quadro di emergenza): timoneria e, tramite Q9 e l'UPS, le luci essenziali
+    b.wire('KC1:2', 'Q10:1', 25);
+    b.wire('KC1:4', 'Q10:3', 25);
+    b.wire('KC1:6', 'Q10:5', 25);
+    b.wire('Q10:2', 'M2:U1', 2.5);
+    b.wire('Q10:4', 'M2:V1', 2.5);
+    b.wire('Q10:6', 'M2:W1', 2.5);
+    b.wire('M1:PE', 'M2:PE', 6);
+    b.wire('KC1:2', 'Q9:1', 25);
+    b.wire('KC1:N2', 'Q9:N1', 25);
+    b.wire('Q9:2', 'U1:1', 2.5);
+    b.wire('Q9:N2', 'U1:N1', 2.5);
+    b.wire('U1:2', 'Q4:1', 2.5);
+    b.wire('U1:N2', 'Q4:N1', 2.5);
+    // ausiliari alimentati dalla linea luci (sotto UPS): controllo isolamento e relè di distacco
     b.wire('Q4:2', 'KI1:L', 1.5);
     b.wire('Q4:N2', 'KI1:N', 1.5);
     b.wire('KI1:L', 'KL1:L', 1.5);
