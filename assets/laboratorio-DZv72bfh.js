@@ -1,0 +1,1 @@
+import"./modulepreload-polyfill-B5Qt9EMX.js";import{A as r}from"./App-7H7r-3-a.js";const t=new r(document.getElementById("app"));window.__app=t;t.start().catch(e=>{console.error(e);const o=document.querySelector("#loader .loader-sub");o&&(o.textContent="Errore di avvio: "+e.message)});

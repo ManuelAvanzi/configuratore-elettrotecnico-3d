@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0e1115" />
+    <meta name="description" content="Configuratore 3D di impianti e quadri elettrici: laboratorio didattico nel browser e in realtà virtuale per gli istituti tecnici. Tutorial guidato, laboratorio completo con simulazione e verifiche, esercitazioni in classe." />
+    <title>Configuratore elettrotecnico 3D — Laboratorio didattico</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FF5900' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M13 2 3 14h9l-1 8 10-12h-9l1-8z'/%3E%3C/svg%3E" />
+    <link rel="preload" as="image" href="img/classe-hero.jpg" fetchpriority="high" />
+    <script type="module" crossorigin src="./assets/home-D0meAb1Q.js"></script>
+    <link rel="modulepreload" crossorigin href="./assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <link rel="stylesheet" crossorigin href="./assets/home-CSwfM3Um.css">
+  </head>
+  <body class="home">
+    <header class="site-header">
+      <a class="wordmark" href="./index.html" aria-label="Elettrolab, homepage">ELETTROLAB</a>
+      <nav class="site-nav" aria-label="Navigazione principale">
+        <a href="#come-funziona">Come funziona</a>
+        <a href="#inizia">Inizia</a>
+        <a href="./tutorial.html">Tutorial</a>
+      </nav>
+      <a class="nav-action" href="./laboratorio.html">Apri il laboratorio</a>
+    </header>
+
+    <main>
+      <!-- Hero: una foto a tutto schermo, tre scene selezionabili -->
+      <section class="cinema" aria-label="Configuratore 3D di impianti e quadri elettrici">
+        <div class="scenes" aria-hidden="true">
+          <img class="scene active" src="img/classe-hero.jpg" alt="" width="1920" height="1080" fetchpriority="high" data-pos="62% 50%" />
+          <img class="scene render" src="img/hero.jpg" alt="" loading="lazy" data-pos="50% 40%" />
+          <img class="scene render" src="img/quadro.jpg" alt="" loading="lazy" data-pos="50% 50%" />
+        </div>
+        <div class="shade"></div>
+        <div class="cinema-copy">
+          <div class="kicker"><span class="dot"></span> Un laboratorio didattico, nel browser e in VR</div>
+          <h1>Configuratore 3D di <br />impianti e quadri elettrici.</h1>
+          <p>Un laboratorio didattico in 3D per lo studio dei quadri, delle protezioni e degli impianti: si monta, si cabla, si dà corrente e si osserva che cosa succede.</p>
+          <div class="cinema-actions">
+            <a class="cbtn light" href="./tutorial.html">Inizia dal tutorial <span>↗</span></a>
+            <a class="cbtn outline" href="./laboratorio.html">Entra nel laboratorio <span>▷</span></a>
+          </div>
+        </div>
+        <div class="cinema-bottom">
+          <div class="scene-selector" aria-label="Immagini del laboratorio">
+            <button data-scene="0" aria-pressed="true"><small>01</small>In classe</button>
+            <button data-scene="1" aria-pressed="false"><small>02</small>Il banco</button>
+            <button data-scene="2" aria-pressed="false"><small>03</small>Il quadro</button>
+          </div>
+        </div>
+        <span class="credit">In classe: immagine illustrativa · Banco e quadro: viste del laboratorio 3D</span>
+      </section>
+
+      <!-- Come funziona -->
+      <section class="how" id="come-funziona" aria-labelledby="how-title">
+        <div class="wrap">
+          <span class="eyebrow">Il laboratorio digitale</span>
+          <h2 id="how-title">Un laboratorio digitale per gli impianti elettrici</h2>
+          <p class="intro">Il docente propone un’esercitazione e guida gli studenti nella configurazione di un quadro: scelta delle protezioni, cablaggio, prova di funzionamento. Il configuratore simula davvero la corrente, controlla le verifiche normative e raccoglie le scelte in una scheda tecnica da presentare in classe.</p>
+          <ol class="steps">
+            <li><span class="n">1</span><h3>Configurazione del quadro</h3><p>Si montano i componenti sulle guide DIN e sul pannello utenze e si collegano i morsetti; i cavi seguono le canaline con colori e sezioni normalizzati.</p></li>
+            <li><span class="n">2</span><h3>Simulazione e misure</h3><p>Si dà corrente e si osserva l’impianto: tensioni, correnti, interventi delle protezioni, guasti a terra. Multimetro e pinza amperometrica per le misure, verifiche automatiche sulle scelte.</p></li>
+            <li><span class="n">3</span><h3>Verifica e presentazione</h3><p>Lo studente giustifica le scelte, genera la scheda tecnica e presenta la configurazione alla classe sulla LIM. In VR si entra nel laboratorio dal browser del visore.</p></li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- Inizia da qui -->
+      <section class="start" id="inizia" aria-labelledby="start-title">
+        <div class="wrap">
+          <div class="start-head">
+            <h2 id="start-title">Inizia da qui</h2>
+            <p>Scegli il tutorial per chi parte da zero, il laboratorio completo o una delle esercitazioni della scheda.</p>
+          </div>
+          <div class="cards">
+            <a class="card" href="./tutorial.html">
+              <img src="img/classe-pc.jpg" alt="Due studenti al computer seguono il tutorial" loading="lazy" width="1536" height="1024" />
+              <div class="card-body"><h3>Tutorial guidato</h3><p>Nove lezioni brevi, una spiegazione alla volta: il punto da cliccare è evidenziato e ogni passo viene controllato. Tre sono a bordo di una nave, l’ultima in una cabina MT/BT.</p><span class="card-action">Apri il tutorial <span>↗</span></span></div>
+            </a>
+            <a class="card" href="./laboratorio.html">
+              <img src="img/classe-vr.jpg" alt="Uno studente con il visore cabla un quadro davanti alla LIM" loading="lazy" width="1536" height="1024" />
+              <div class="card-body"><h3>Laboratorio completo</h3><p>Il configuratore libero: 31 componenti, cablaggio, simulazione, verifiche, scheda tecnica. Sul PC o con il visore.</p><span class="card-action">Entra nel laboratorio <span>↗</span></span></div>
+            </a>
+            <a class="card" href="./laboratorio.html?scheda=guide">
+              <img src="img/hero.jpg" alt="Il banco didattico con il quadro e il pannello utenze" loading="lazy" width="1400" height="788" />
+              <div class="card-body"><h3>Esercitazioni in classe</h3><p>Le cinque esercitazioni della scheda del laboratorio, dall’impianto base alla presentazione, con passi verificati in automatico.</p><span class="card-action">Scegli un’esercitazione <span>↗</span></span></div>
+            </a>
+          </div>
+          <p class="note">I progetti restano sul dispositivo e si possono salvare come file. Per la realtà virtuale si apre lo stesso indirizzo dal browser del visore Meta Quest.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="wrap foot">
+        <div class="foot-brand">
+          <img src="img/carrarolab.png" alt="CarraroLab" width="150" height="32" />
+          <span>Dispositivi elettrotecnici: configuratore 3D · Laboratorio immersivo per gli istituti tecnici</span>
+        </div>
+        <div class="foot-links">
+          <a href="https://education.carraro-lab.com/catalogo-dei-laboratori-didattici/elettronica-ed-elettrotecnica,istituti-tecnici/dispositivi-elettrotecnici-configuratore-3d/" target="_blank" rel="noopener">Scheda del laboratorio ↗</a>
+          <a href="./laboratorio.html">Laboratorio</a>
+          <a href="./tutorial.html">Tutorial</a>
+        </div>
+        <small>© <span id="year"></span> CarraroLab · Un laboratorio per la didattica</small>
+      </div>
+    </footer>
+  </body>
+</html>
