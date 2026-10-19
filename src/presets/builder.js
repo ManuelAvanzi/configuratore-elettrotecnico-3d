@@ -7,8 +7,8 @@ import { Project, blankProject } from '../core/project.js';
  *   b.wire('Q1:2', 'SA1:L', sezione, colore)
  */
 export function build(opts, fn) {
-  const p = new Project(blankProject({ sys: opts.sys || '1F', earth: opts.earth || 'TT', title: opts.title || 'Impianto' }));
-  Object.assign(p.supply().params, opts.supply || {});
+  const p = new Project(blankProject({ sys: opts.sys || '1F', earth: opts.earth || 'TT', title: opts.title || 'Impianto', source: opts.source || 'supply' }));
+  if (p.supply()) Object.assign(p.supply().params, opts.supply || {});
   if (opts.description) p.data.meta.description = opts.description;
   const byTag = { XA: 'XA', PE: 'PE' };
   const api = {

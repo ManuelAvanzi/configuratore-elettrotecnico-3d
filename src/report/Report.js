@@ -3,7 +3,7 @@
 import { DEFS } from '../catalog/defs/index.js';
 import { resolveParams } from '../catalog/defs/common.js';
 import { mountLabel } from '../core/layout.js';
-import { colorById, fmt, fmtA, fmtV, fmtW, V_PHASE } from '../sim/norms.js';
+import { colorById, fmt, fmtA, fmtV, fmtW } from '../sim/norms.js';
 import { cabs, csub, power } from '../sim/complex.js';
 import { summarize, CHECK_GROUPS } from '../sim/checks.js';
 import { exerciseById, exerciseContext, trackById, JUSTIFICATIONS } from '../exercises/index.js';
@@ -58,7 +58,8 @@ export function openReport(app) {
   app.view.flag([], []);
   const p = app.project;
   const m = p.meta;
-  const sp = p.params('XA');
+  const sp = p.system();
+  const V_PHASE = app.sim.env.sys.Vph;
   const imgs = snapshots(app);
   app.checksPanel.run();
   const checks = app.checksPanel.results;
@@ -91,9 +92,9 @@ export function openReport(app) {
   }).join('');
 
   // Misure in esercizio
-  const sup = app.sim.getInst('XA')?.state;
+  const sup = app.sim.powerState();
   let meas = '';
-  if (sup?.on) {
+  if (sup.on) {
     const rows = [];
     for (const c of comps) {
       const def = DEFS[c.type];
@@ -180,9 +181,11 @@ footer{margin-top:30px;padding-top:12px;border-top:1px solid var(--line);color:v
 <div class="meta"><div><span>Studente / gruppo</span>${esc(m.author) || '—'}</div><div><span>Classe</span>${esc(m.classe) || '—'}</div><div><span>Istituto</span>${esc(m.school) || '—'}</div><div><span>Data</span>${date}</div></div>
 ${m.description ? `<p>${esc(m.description).replace(/\n/g, '<br>')}</p>` : ''}
 <section><h2>Il banco configurato</h2><div class="imgs"><img src="${imgs.panoramica}" alt="Vista d'insieme"><img src="${imgs.quadro}" alt="Quadro elettrico"><img src="${imgs.utenze}" alt="Pannello utenze"></div></section>
-<section><h2>Dati di fornitura</h2><table><tbody>
-<tr><td>Sistema</td><td><b>${sp.sys === '3F' ? 'Trifase 400 V + N' : 'Monofase 230 V'}</b>, 50 Hz</td><td>Distribuzione</td><td><b>${esc(sp.earth)}</b></td></tr>
-<tr><td>Potenza contrattuale</td><td><b>${fmt(sp.Pc, sp.Pc % 1 ? 1 : 0)} kW</b> (disponibile ${fmt(sp.Pc * 1.1, 2)} kW)</td><td>Icc presunta</td><td><b>${fmt(sp.Icc, 1)} kA</b></td></tr>
+<section><h2>${sp.kind === 'genset' ? 'Dati della centrale di bordo' : 'Dati di fornitura'}</h2><table><tbody>
+<tr><td>Sistema</td><td><b>${sp.sys === '3F' ? `Trifase ${sp.Vll} V + N` : `Monofase ${sp.Vph} V`}</b>, ${sp.f} Hz</td><td>Distribuzione</td><td><b>${esc(sp.earth)}${sp.earth === 'IT' ? ' (neutro isolato)' : ''}</b></td></tr>
+${sp.kind === 'genset'
+    ? `<tr><td>Generatori</td><td><b>${esc(sp.sources.join(', '))}</b></td><td>Potenza nominale</td><td><b>${fmt(p.sources().reduce((a, c) => a + (p.params(c.id).Sn || 0), 0), 0)} kVA</b></td></tr>`
+    : `<tr><td>Potenza contrattuale</td><td><b>${fmt(sp.Pc, sp.Pc % 1 ? 1 : 0)} kW</b> (disponibile ${fmt(sp.Pc * 1.1, 2)} kW)</td><td>Icc presunta</td><td><b>${fmt(sp.Icc, 1)} kA</b></td></tr>`}
 <tr><td>Resistenza di terra Re</td><td><b>${fmt(sp.Re, 0)} Ω</b></td><td></td><td></td></tr></tbody></table></section>
 <section><h2>Distinta dei componenti</h2><table><thead><tr><th>Sigla</th><th>Componente</th><th>Posizione</th><th>Parametri</th></tr></thead><tbody>${bom}</tbody></table></section>
 <section><h2>Elenco dei collegamenti</h2><table><thead><tr><th>N.</th><th>Da</th><th>A</th><th>Colore</th><th>Sezione</th><th>Lunghezza</th></tr></thead><tbody>${wires}</tbody></table></section>

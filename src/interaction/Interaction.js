@@ -242,6 +242,11 @@ export class Interaction {
   }
 
   doInteract(compId, action, phase) {
+    if (compId === 'XA' && action === 'power' && !this.app.sim.getInst('XA')) {
+      // leva del contatore in un progetto senza arrivo linea: comanda la centrale
+      this.app.togglePower();
+      return;
+    }
     const r = this.app.sim.interact(compId, action, phase);
     if (r?.sound) this.app.sfx(r.sound);
     if (r?.msg) this.app.toast(r.msg, r.level || 'info');
@@ -290,7 +295,8 @@ export class Interaction {
   autoSection(a, b) {
     const types = [a, b].map((t) => this.project.comp(t.ref.c)?.type);
     const roles = [a.def.role, b.def.role];
-    if (types.includes('supply')) return this.project.params('XA').sys === '3F' ? 6 : 6;
+    if (types.includes('genset')) return 25;
+    if (types.includes('supply')) return 6;
     if (types.includes('xs')) return 2.5;
     if (roles.includes('coil') || roles.includes('aux') || roles.includes('ctrl')) return 1;
     return this.wireOpts.section;

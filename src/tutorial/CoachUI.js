@@ -58,9 +58,7 @@ export class CoachUI {
   }
 
   refreshPower() {
-    const s = this.app.sim.getInst('XA')?.state;
-    if (!s) return;
-    const on = s.on && !s.limiter;
+    const on = this.app.sim.powerState().on;
     this.powerPill.className = 'pill' + (on ? ' on' : '');
     this.powerPill.querySelector('span').textContent = on ? 'Impianto alimentato' : 'Impianto spento';
   }

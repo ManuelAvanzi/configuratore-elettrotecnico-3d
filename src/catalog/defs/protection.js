@@ -1,7 +1,7 @@
 // Apparecchi di manovra e protezione: sezionatori, magnetotermici, differenziali, magnetotermici-differenziali, relè termico.
 import { sw, res, T, P, thermalUpdate, clamp } from './common.js';
 import { cabs, cadd, ZERO } from '../../sim/complex.js';
-import { CURVES, V_PHASE, fmtA, fmt } from '../../sim/norms.js';
+import { CURVES, sysOf, fmtA, fmt } from '../../sim/norms.js';
 
 // Poli standard (lato alimentazione in alto, lato carico in basso)
 const POLE = {
@@ -162,7 +162,7 @@ export const mcb3p = makeMCB({
   poles: ['L1', 'L2', 'L3'],
   prot: ['L1', 'L2', 'L3'],
   modules: 3,
-  inOptions: [1, 2, 3, 4, 6, 10, 13, 16, 20, 25, 32],
+  inOptions: [1, 2, 3, 4, 6, 10, 13, 16, 20, 25, 32, 40, 50, 63],
   defIn: 6,
   help: 'Protezione tripolare, tipica delle linee motore. Per i motori si usa la curva C o D per non intervenire sulla corrente di spunto.',
 });
@@ -174,9 +174,9 @@ export const mcb4p = makeMCB({
   poles: ['L1', 'L2', 'L3', 'N'],
   prot: ['L1', 'L2', 'L3'],
   modules: 4,
-  inOptions: [10, 16, 20, 25, 32, 40, 63],
+  inOptions: [10, 16, 20, 25, 32, 40, 63, 80, 100, 125],
   defIn: 25,
-  help: 'Interruttore generale di un quadro trifase con neutro.',
+  help: 'Interruttore generale di un quadro trifase con neutro (fino a 125 A per gli arrivi dei generatori di bordo).',
 });
 
 // ── Sezionatori ───────────────────────────────────────────────────────────────────────
@@ -190,7 +190,7 @@ function makeIsolator({ type, name, short, poles, modules }) {
     modules,
     tag: 'Q',
     help: 'Interruttore di manovra-sezionatore: apre e chiude il circuito sotto carico e garantisce il sezionamento, ma NON protegge da sovraccarichi e cortocircuiti.',
-    params: [P.select('In', 'Corrente nominale', [32, 40, 63, 80, 100], 40, { unit: 'A' })],
+    params: [P.select('In', 'Corrente nominale', [32, 40, 63, 80, 100, 125, 160], 40, { unit: 'A' })],
     terminals: () => poleTerminals(poles),
     init: () => ({ on: true }),
     elements: (inst) => poleElements(poles, inst.state.on),
@@ -254,10 +254,10 @@ function rcdTest(inst, ctx, phase) {
   return phase === 'up' ? null : { sound: 'click' };
 }
 
-function testElement(inst, poles) {
+function testElement(inst, poles, env) {
   // Resistenza di prova tra fase lato carico e neutro lato alimentazione (bypassa il toroide)
   if (!inst.state.test || !inst.state.on) return null;
-  const Rt = V_PHASE / (2.5 * inst.params.IDn);
+  const Rt = sysOf(env).Vph / (2.5 * inst.params.IDn);
   return res('test', POLE[poles[0]].bottom, POLE.N.top, Rt);
 }
 
@@ -274,7 +274,7 @@ function makeRCD({ type, name, short, poles, modules }) {
     params: [P.select('In', 'Corrente nominale In', [25, 40, 63], 40, { unit: 'A' }), idnParam, rcdTypeParam],
     terminals: () => poleTerminals(poles),
     init: () => ({ on: true, tripped: false, cause: null, test: false, Id: 0 }),
-    elements: (inst) => [...poleElements(poles, inst.state.on), testElement(inst, poles)],
+    elements: (inst, env) => [...poleElements(poles, inst.state.on), testElement(inst, poles, env)],
     evaluate: (inst, ctx) => rcdEvaluate(inst, ctx, poles.length),
     interact: { toggle: leverToggle, test: rcdTest },
     protection: (p) => ({ kind: 'rcd', In: p.In, IDn: p.IDn, poles: polePaths(poles), overcurrent: false }),
@@ -308,7 +308,7 @@ export const rcbo1pn = {
   params: [P.select('In', 'Corrente nominale In', [6, 10, 16, 20, 25, 32], 25, { unit: 'A' }), curveParam, pdiParam, idnParam, rcdTypeParam],
   terminals: () => poleTerminals(['L1', 'N']),
   init: () => ({ on: true, tripped: false, cause: null, theta: 0, damaged: false, test: false, I: 0, Id: 0 }),
-  elements: (inst) => [...poleElements(['L1', 'N'], inst.state.on), testElement(inst, ['L1', 'N'])],
+  elements: (inst, env) => [...poleElements(['L1', 'N'], inst.state.on), testElement(inst, ['L1', 'N'], env)],
   evaluate(inst, ctx) {
     if (mcbEvaluate(inst, ctx, [0])) return true;
     return rcdEvaluate(inst, ctx, 2);

@@ -1,7 +1,7 @@
 // Alimentazione: punto di consegna (rete + contatore con limitatore), collettore di terra, morsetti.
 import { source, imp, res, sw, T, P } from './common.js';
 import { csub, cabs, power } from '../../sim/complex.js';
-import { V_PHASE, fmtV, fmtA, fmtW, fmt } from '../../sim/norms.js';
+import { SYSTEMS, fmtV, fmtA, fmtW, fmt } from '../../sim/norms.js';
 
 const PHASES = ['L1', 'L2', 'L3'];
 
@@ -16,20 +16,27 @@ export const supply = {
   tag: 'XA',
   help:
     'La linea arriva dal contatore del distributore. Il contatore limita la potenza prelevabile ' +
-    '(potenza contrattuale + 10%): oltre questo valore, dopo un breve ritardo, stacca l’alimentazione.',
+    '(potenza contrattuale + 10%): oltre questo valore, dopo un breve ritardo, stacca l’alimentazione. ' +
+    'Il sistema di distribuzione dice come è messo a terra il neutro: TT e TN-S a terra, IT isolato (bordo nave, ospedali).',
   params: [
     P.select('sys', 'Sistema di alimentazione', [
       { value: '1F', label: 'Monofase 230 V (L-N)' },
       { value: '3F', label: 'Trifase 400 V (L1-L2-L3-N)' },
     ], '1F'),
+    P.select('net', 'Tensione e frequenza', Object.values(SYSTEMS).map((s) => ({ value: s.id, label: s.label })), 'it230'),
     P.select('earth', 'Sistema di distribuzione', [
       { value: 'TT', label: 'TT — utenza alimentata in BT con dispersore proprio' },
       { value: 'TN-S', label: 'TN-S — utenza con cabina propria (PE separato)' },
+      { value: 'IT', label: 'IT — neutro isolato da terra (bordo nave, locali medici)' },
     ], 'TT'),
     P.select('Pc', 'Potenza contrattuale', [3, 4.5, 6, 10, 15, 20, 30], 3, { unit: 'kW' }),
     P.select('Icc', 'Corrente di cortocircuito presunta', [1.5, 3, 4.5, 6, 10], 4.5, { unit: 'kA' }),
     P.number('Re', 'Resistenza di terra Re', 1, 500, 1, 20, 'Ω', {
       help: 'Resistenza del dispersore dell’impianto. Nel sistema TT deve valere Re · IΔn ≤ 50 V.',
+    }),
+    P.number('Rins', 'Resistenza di isolamento della rete (IT)', 5, 1000, 5, 200, 'kΩ', {
+      teacher: true,
+      help: 'Solo nel sistema IT: isolamento verso terra della rete sana, che limita la corrente del primo guasto.',
     }),
   ],
   terminals: (p) => {
@@ -44,21 +51,23 @@ export const supply = {
   elements(inst) {
     const p = inst.params;
     const s = inst.state;
-    const V = s.on && !s.limiter ? V_PHASE : 0;
+    const Vph = (SYSTEMS[p.net] || SYSTEMS.it230).Vph;
+    const V = s.on && !s.limiter ? Vph : 0;
     const Icc = p.Icc * 1000;
     const els = [];
     let zs;
     if (p.sys === '3F') {
-      const z = V_PHASE / Icc; // corrente di cortocircuito trifase simmetrica
+      const z = Vph / Icc; // corrente di cortocircuito trifase simmetrica
       zs = { re: z * 0.7071, im: z * 0.7071 };
       PHASES.forEach((t, k) => els.push(source('s' + t, t, '#s', V, -120 * k, zs)));
     } else {
-      const z = V_PHASE / Icc / 2; // anello di guasto fase-neutro
+      const z = Vph / Icc / 2; // anello di guasto fase-neutro
       zs = { re: z * 0.7071, im: z * 0.7071 };
       els.push(source('sL1', 'L1', '#s', V, 0, zs));
     }
     els.push(imp('zN', 'N', '#s', zs.re, zs.im));
-    els.push(res('rn', '#s', 'GND', 1.0)); // neutro a terra in cabina
+    if (p.earth === 'IT') els.push(res('rins', '#s', 'GND', p.Rins * 1000)); // neutro isolato: solo l'isolamento della rete
+    else els.push(res('rn', '#s', 'GND', 1.0)); // neutro a terra in cabina
     if (p.earth === 'TN-S') els.push(imp('zpe', 'PE', '#s', zs.re, zs.im));
     els.push(res('re', 'PE', 'GND', p.Re)); // dispersore dell'utente
     return els;
@@ -118,11 +127,13 @@ export const supply = {
   readouts(inst, ctx) {
     const p = inst.params;
     const s = inst.state;
+    const sys = SYSTEMS[p.net] || SYSTEMS.it230;
     const vln = cabs(csub(ctx.V('L1'), ctx.V('N')));
     const S = Math.hypot(s.P, s.Q);
     const out = [
       { label: 'Stato', value: s.limiter ? 'DISTACCATO (limitatore)' : s.on ? 'In servizio' : 'Spento', level: s.limiter ? 'error' : s.on ? 'ok' : 'off' },
       { label: 'Tensione L-N', value: fmtV(vln) },
+      { label: 'Sistema', value: `${sys.Vph}/${sys.Vll} V · ${sys.f} Hz · ${p.earth}${p.earth === 'IT' ? ' (neutro isolato)' : ''}` },
     ];
     if (p.sys === '3F') {
       out.push({ label: 'Tensione L1-L2', value: fmtV(cabs(csub(ctx.V('L1'), ctx.V('L2')))) });
@@ -137,6 +148,12 @@ export const supply = {
     return out;
   },
   paths: () => [],
+  source: true,
+  system: (p) => ({ ...(SYSTEMS[p.net] || SYSTEMS.it230), earth: p.earth }),
+  setPower(inst, on) {
+    inst.state.on = on;
+    if (on) inst.state.limiter = false;
+  },
 };
 
 /** Collettore (barra) di terra: tutti i morsetti allo stesso potenziale */

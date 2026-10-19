@@ -488,8 +488,7 @@ section('16. Modelli predefiniti e soluzioni delle esercitazioni senza non confo
     const p = new Project(data);
     const sim = new Simulator(DEFS);
     sim.sync(p.data, (w) => p.electricalLength(w));
-    sim.getInst('XA').state.on = true;
-    sim.settle();
+    sim.setPower(true); // arrivo linea o centrale di gruppi elettrogeni
     const errs = runChecks(p, sim).filter((r) => r.level === 'error');
     ok(errs.length === 0, `${title}: nessun errore`, errs.map((e) => e.title + ' — ' + e.detail).join(' | '));
   }

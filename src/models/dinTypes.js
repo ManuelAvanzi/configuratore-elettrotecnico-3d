@@ -26,6 +26,37 @@ const ON_OFF = (p, w) => {
 
 // ── Specifiche per tipo ──────────────────────────────────────────────────────────────
 const SPECS = {
+  imd(def, p, comp) {
+    return {
+      led: { x: 0.012, y: 0.006, color: '#ff4d4d' },
+      paint(pt, d) {
+        tagBox(pt, comp.tag, 18.3, d.w);
+        pt.text('CONTROLLO', 0, 11.5, 2.4, { weight: 800 });
+        pt.text('ISOLAMENTO', 0, 8.3, 2.4, { weight: 800 });
+        pt.rect(-6, 1, 17, 7, '#1d2227', 0.8);
+        pt.text('kΩ', -6, 0.2, 2.6, { weight: 700, color: '#7fe3a0' });
+        pt.text(`soglia ${p.soglia} kΩ`, 0, -6.5, 2.1, { weight: 600 });
+        pt.text('IT · 11-14 allarme', 0, -11, 2, { weight: 600, color: '#555' });
+        pt.symEarth(d.w / 2 - 5, -15.5, 0.8);
+      },
+    };
+  },
+
+  kls(def, p, comp) {
+    return {
+      led: { x: 0.008, y: 0.005, color: '#ffb020' },
+      paint(pt, d) {
+        tagBox(pt, comp.tag, 18.3, d.w);
+        pt.text('DISTACCO', 0, 11.5, 2.4, { weight: 800 });
+        pt.text('CARICHI', 0, 8.3, 2.4, { weight: 800 });
+        pt.text(p.mode === 'freq' ? `f < fn − ${p.df} Hz` : `> ${p.soglia} %`, 0, 1, 2.6, { weight: 800, color: '#0f3d80' });
+        pt.text(`ritardo ${p.ritardo} s`, 0, -4.5, 2.1, { weight: 600 });
+        pt.text('11-12 NC · 11-14 NA', 0, -10, 2, { weight: 700 });
+        pt.text('Load shedding', 0, -15, 2, { weight: 600, color: '#555' });
+      },
+    };
+  },
+
   supply(def, p, comp, terms) {
     const tri = p.sys === '3F';
     return {

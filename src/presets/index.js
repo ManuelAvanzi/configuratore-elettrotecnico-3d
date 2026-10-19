@@ -43,7 +43,81 @@ export const PRESETS = [
     icon: 'sparkles',
     make: domotica,
   },
+  {
+    id: 'nave',
+    title: 'Centrale elettrica di bordo',
+    text: 'Due gruppi diesel-generatore da 50 kVA a 440 V 60 Hz con neutro isolato (IT), controllo dell’isolamento, distacco dei carichi non essenziali, elica di manovra e utenze di bordo.',
+    icon: 'waves',
+    make: nave,
+  },
 ];
+
+/** Impianto di bordo di uno yacht: due gruppi in parallelo, sistema IT, carichi essenziali e non */
+export function nave() {
+  return build({ sys: '3F', source: 'none', title: 'Centrale elettrica di bordo', description: 'Yacht con due gruppi diesel-generatore da 50 kVA a 440 V 60 Hz, neutro isolato (IT) con controllo dell’isolamento, quadro principale con distacco automatico dei carichi non essenziali (cucina, aria condizionata). Carichi essenziali: elica di manovra e luci di navigazione.' }, (b) => {
+    b.add('G1', 'genset', 'A1', { Sn: 50, net: 'nave440', earth: 'IT', auto: true }, 'Gruppo principale: 50 kVA, 440 V 60 Hz, neutro isolato.');
+    b.add('G2', 'genset', 'A3', { Sn: 50, net: 'nave440', earth: 'IT', auto: true, standby: true }, 'Gruppo di riserva: parte da solo quando il primo supera l’85 %.');
+    b.add('Q1', 'mcb4p', 'R1:0', { In: 80, curve: 'C', pdi: 6 }, 'Arrivo G1: In 80 A per i 66 A nominali del gruppo, cavi da 25 mm².');
+    b.add('Q2', 'mcb4p', 'R1:4', { In: 80, curve: 'C', pdi: 6 }, 'Arrivo G2.');
+    b.add('KI1', 'imd', 'R1:8', { soglia: 50 }, 'Obbligatorio con il neutro isolato: segnala il primo guasto a terra.');
+    b.add('KL1', 'kls', 'R1:11', { soglia: 90, ritardo: 1 }, 'Stacca cucina e aria condizionata quando la centrale supera il 90 %.');
+    b.add('Q3', 'mcb3p', 'R2:0', { In: 32, curve: 'C', pdi: 6 }, 'Elica di manovra 7,5 kW: In 13 A, spunto ≈ 80 A sotto la soglia magnetica (240 A).');
+    b.add('Q4', 'mcb1pn', 'R2:3', { In: 10, curve: 'C', pdi: 6 }, 'Luci di navigazione (essenziali, sempre alimentate).');
+    b.add('Q5', 'mcb1pn', 'R2:5', { In: 16, curve: 'C', pdi: 6 }, 'Cucina: non essenziale, a valle del distacco carichi.');
+    b.add('Q6', 'mcb1pn', 'R2:7', { In: 16, curve: 'C', pdi: 6 }, 'Aria condizionata: non essenziale, a valle del distacco carichi.');
+    b.add('M1', 'm3', 'B1', { P: 7.5, conn: 'Y', load: 80 }, 'Elica trasversale di manovra (bow thruster).');
+    b.add('E1', 'lamp', 'B3', { lt: 'led15' }, 'Luci di navigazione (essenziali).');
+    b.add('E2', 'lamp', 'B4', { lt: 'led10' });
+    b.add('XS1', 'xs', 'C1', { carico: 'oven', tipo: 'sch' }, 'Cucina: utenza non essenziale.');
+    b.add('XS2', 'xs', 'C2', { carico: 'aircon', tipo: 'sch' }, 'Aria condizionata: non essenziale.');
+    // arrivi dei generatori
+    for (const [G, Q] of [['G1', 'Q1'], ['G2', 'Q2']]) {
+      b.wire(`${G}:L1`, `${Q}:1`, 25);
+      b.wire(`${G}:L2`, `${Q}:3`, 25);
+      b.wire(`${G}:L3`, `${Q}:5`, 25);
+      b.wire(`${G}:N`, `${Q}:N1`, 25);
+    }
+    b.wire('G1:PE', 'PE:PE1', 16);
+    b.wire('G2:PE', 'PE:PE2', 16);
+    // sbarra principale: uscite dei due arrivi in parallelo, poi le partenze a catena
+    b.wire('Q1:2', 'Q2:2', 25);
+    b.wire('Q1:4', 'Q2:4', 25);
+    b.wire('Q1:6', 'Q2:6', 25);
+    b.wire('Q1:N2', 'Q2:N2', 25);
+    // (a monte delle partenze i cavi sono protetti solo dagli arrivi da 80 A: sezione 25 mm²)
+    b.wire('Q2:2', 'Q3:1', 25);
+    b.wire('Q2:4', 'Q3:3', 25);
+    b.wire('Q2:6', 'Q3:5', 25);
+    b.wire('Q3:1', 'Q4:1', 25);
+    b.wire('Q3:3', 'KL1:11', 25);
+    b.wire('KL1:12', 'Q5:1', 25);
+    b.wire('Q5:1', 'Q6:1', 25);
+    b.wire('Q2:N2', 'Q4:N1', 25);
+    b.wire('Q4:N1', 'Q5:N1', 25);
+    b.wire('Q5:N1', 'Q6:N1', 25);
+    // ausiliari alimentati dalla linea luci (10 A): controllo isolamento e relè di distacco
+    b.wire('Q4:2', 'KI1:L', 1.5);
+    b.wire('Q4:N2', 'KI1:N', 1.5);
+    b.wire('KI1:L', 'KL1:L', 1.5);
+    b.wire('KI1:N', 'KL1:N', 1.5);
+    b.wire('KI1:PE', 'PE:PE3', 1.5);
+    // utenze
+    b.wire('Q3:2', 'M1:U1', 6);
+    b.wire('Q3:4', 'M1:V1', 6);
+    b.wire('Q3:6', 'M1:W1', 6);
+    b.wire('M1:PE', 'PE:PE4', 6);
+    b.wire('Q4:2', 'E1:L', 1.5, 'grey');
+    b.wire('E1:L', 'E2:L', 1.5, 'grey');
+    b.wire('Q4:N2', 'E1:N', 1.5);
+    b.wire('E1:N', 'E2:N', 1.5);
+    b.wire('Q5:2', 'XS1:L', 2.5);
+    b.wire('Q5:N2', 'XS1:N', 2.5);
+    b.wire('XS1:PE', 'PE:PE5', 2.5);
+    b.wire('Q6:2', 'XS2:L', 2.5);
+    b.wire('Q6:N2', 'XS2:N', 2.5);
+    b.wire('XS2:PE', 'PE:PE6', 2.5);
+  });
+}
 
 export function appartamento() {
   return build({ sys: '1F', title: 'Quadro di un appartamento', supply: { Pc: 3, Icc: 4.5, Re: 20 }, description: 'Impianto monofase di un piccolo appartamento (modello di riferimento).' }, (b) => {

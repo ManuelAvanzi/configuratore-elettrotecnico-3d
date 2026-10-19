@@ -3,6 +3,7 @@ import { supply, pebar, term } from './supply.js';
 import { isol2p, isol4p, mcb1pn, mcb3p, mcb4p, rcd2p, rcd4p, rcbo1pn, fr3 } from './protection.js';
 import { km3, km2m, kpp, kt, kcr, hl, sbm, sel, pm1 } from './control.js';
 import { lamp, xs, sa, sd, si, sp, ss, pir, hb, m3 } from './field.js';
+import { genset, imd, kls } from './nautico.js';
 
 export const DEFS = {};
 for (const d of [
@@ -10,6 +11,7 @@ for (const d of [
   isol2p, isol4p, mcb1pn, mcb3p, mcb4p, rcd2p, rcd4p, rcbo1pn, fr3,
   km3, km2m, kpp, kt, kcr, hl, sbm, sel, pm1,
   lamp, xs, sa, sd, si, sp, ss, pir, hb, m3,
+  genset, imd, kls,
 ]) {
   DEFS[d.type] = d;
 }
@@ -22,6 +24,7 @@ export const FAMILIES = [
   { id: 'morsetti', label: 'Morsetti', mount: 'din' },
   { id: 'utenze', label: 'Utenze', mount: 'field' },
   { id: 'campo', label: 'Comandi di campo', mount: 'field' },
+  { id: 'alimentazione', label: 'Generazione (impianti di bordo)', mount: 'field' },
 ];
 
 export const getDef = (type) => DEFS[type];

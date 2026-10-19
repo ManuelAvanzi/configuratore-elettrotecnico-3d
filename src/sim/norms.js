@@ -2,10 +2,26 @@
 // Riferimenti: CEI 64-8, CEI EN 60898-1 (interruttori automatici), CEI EN 61008/61009 (differenziali),
 // CEI-UNEL 35024/1 (portate dei cavi), CEI EN 60204-1 (colori dei conduttori).
 
-/** Tensioni nominali del sistema BT */
+/** Tensioni nominali del sistema BT di riferimento (rete pubblica italiana) */
 export const V_PHASE = 230;
 export const V_LINE = 400;
 export const FREQ = 50;
+
+/**
+ * Sistemi di rete selezionabili (tensione di fase, concatenata, frequenza). Il simulatore lavora con il sistema
+ * dichiarato dalla sorgente del progetto (arrivo linea o gruppo elettrogeno): `env.sys`.
+ */
+export const SYSTEMS = {
+  it230: { id: 'it230', label: '230/400 V · 50 Hz (rete pubblica)', Vph: 230, Vll: 400, f: 50 },
+  nave440: { id: 'nave440', label: '254/440 V · 60 Hz (bordo nave)', Vph: 254, Vll: 440, f: 60 },
+  nave690: { id: 'nave690', label: '400/690 V · 60 Hz (bordo nave, distribuzione primaria)', Vph: 400, Vll: 690, f: 60 },
+};
+export const DEFAULT_SYS = { ...SYSTEMS.it230, earth: 'TT', fBus: 50 };
+/** Sistema di rete corrente (dall'ambiente del simulatore), con i valori di default se manca */
+export const sysOf = (env) => (env && env.sys) || DEFAULT_SYS;
+
+/** Costante termica della protezione di generatore: 1,5·In → intervento in ~2 minuti (registri navali) */
+export const GEN_K = 138;
 
 /** Resistività del rame alla temperatura di esercizio (70 °C) [Ω·mm²/m] */
 export const RHO_CU = 0.0214;
@@ -13,16 +29,16 @@ export const RHO_CU = 0.0214;
 /** Resistenza di un contatto chiuso [Ω] */
 export const R_CONTACT = 1e-3;
 
-/** Sezioni commerciali [mm²] */
-export const SECTIONS = [1, 1.5, 2.5, 4, 6, 10, 16];
+/** Sezioni commerciali [mm²] (fino a 16 per gli impianti civili; oltre, per le linee di generazione e di bordo) */
+export const SECTIONS = [1, 1.5, 2.5, 4, 6, 10, 16, 25, 35, 50, 70, 95, 120];
 
 /**
  * Portata Iz [A] — cavi unipolari in PVC in tubo su parete (metodo B1), 30 °C.
  * `2`: circuiti monofase (2 conduttori caricati) · `3`: circuiti trifase (3 conduttori caricati)
  */
 export const IZ_TABLE = {
-  2: { 1: 13.5, 1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76 },
-  3: { 1: 12, 1.5: 15.5, 2.5: 21, 4: 28, 6: 36, 10: 50, 16: 68 },
+  2: { 1: 13.5, 1.5: 17.5, 2.5: 24, 4: 32, 6: 41, 10: 57, 16: 76, 25: 101, 35: 125, 50: 151, 70: 192, 95: 232, 120: 269 },
+  3: { 1: 12, 1.5: 15.5, 2.5: 21, 4: 28, 6: 36, 10: 50, 16: 68, 25: 89, 35: 110, 50: 134, 70: 171, 95: 207, 120: 239 },
 };
 
 export function iz(section, loaded = 2) {
@@ -32,7 +48,7 @@ export function iz(section, loaded = 2) {
 
 /** Diametro esterno indicativo del cavo unipolare [mm] (per il disegno 3D) */
 export function wireOuterDiameter(section) {
-  return { 1: 2.6, 1.5: 3.0, 2.5: 3.6, 4: 4.2, 6: 4.8, 10: 6.2, 16: 7.3 }[section] ?? 3;
+  return { 1: 2.6, 1.5: 3.0, 2.5: 3.6, 4: 4.2, 6: 4.8, 10: 6.2, 16: 7.3, 25: 9, 35: 10.5, 50: 12.5, 70: 14.5, 95: 17, 120: 19 }[section] ?? 3;
 }
 
 /** Colori dei conduttori (CEI EN 60446 / 60204-1) */

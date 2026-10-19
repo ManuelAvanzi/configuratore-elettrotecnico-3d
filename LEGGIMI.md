@@ -78,6 +78,18 @@ corrente. A fine lezione l'impianto si può aprire nel laboratorio completo.
   componente con la sua motivazione → verifiche. È lo strumento della Fase 4.
 - **Realtà virtuale (WebXR)**: raggi dei controller, teletrasporto e rotazione a scatti, tablet sul controller
   sinistro (strumenti, libreria, simulazione, proprietà), etichette fluttuanti, vibrazione dei controller.
+- **Impianti di bordo (modulo nautico, fase A1 — motore)**: sistema di rete parametrico (230/400 V 50 Hz,
+  254/440 V 60 Hz, 400/690 V 60 Hz, scelto dalla sorgente), sistema **IT a neutro isolato** accanto a TT e TN-S
+  (primo guasto a terra senza intervento, secondo guasto = cortocircuito), **gruppo diesel-generatore** con
+  interruttore di macchina, sincronizzatore automatico o manuale, parallelo di più gruppi con ripartizione del
+  carico, chiusura fuori fase, protezione di generatore (cortocircuito breve-ritardato, sovraccarico 1,5 In in
+  2 min, inversione di potenza), gruppo di riserva ad avviamento automatico, **rete in isola** (caduta di tensione
+  allo spunto dei motori, frequenza che cala oltre la potenza nominale), **dispositivo di controllo
+  dell'isolamento** (misura con il metodo dell'iniezione, allarme sotto soglia, contatto 11-14), **relè di
+  distacco carichi** (per carico o per frequenza), verifiche di centrale (potenza installata, riserva n−1,
+  controllo isolamento obbligatorio in IT). Modello predefinito “Centrale elettrica di bordo” (`?modello=nave`).
+  Cavi fino a 120 mm², motori fino a 75 kW, interruttori modulari fino a 125 A. La proposta completa dei moduli
+  nautico e media tensione è in [docs/PROPOSTA-nautico-e-media-tensione.md](docs/PROPOSTA-nautico-e-media-tensione.md).
 
 Le 4 fasi della scheda del laboratorio corrispondono a: *Modelli predefiniti* (Fase 1 — introduzione al
 configuratore) → configurazione e cablaggio, anche in VR (Fase 2) → *analisi dei parametri guidata dal docente*
@@ -104,7 +116,7 @@ Poi apri <http://localhost:5190> (homepage).
 | `npm run build` | versione da pubblicare nella cartella `dist/` (sito statico con le tre pagine) |
 | `npm run preview` | prova locale della versione `dist/` |
 | `npm run pubblica` | pubblica il sito su GitHub Pages (ramo `gh-pages`) |
-| `npm test` | tutti i collaudi: simulatore e verifiche (68 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) |
+| `npm test` | tutti i collaudi: simulatore e verifiche (68 prove) + lezioni del tutorial (70 prove) + esercitazioni (46 prove) + modulo nautico (66 prove) |
 
 ### Provarlo sul visore (Meta Quest)
 
@@ -143,6 +155,9 @@ un Meta Quest 3 simulato (libreria IWER di Meta) permette di mostrare alla class
   direttamente un modello predefinito.
 - `?scheda=guide` (oppure `checks`, `props`) — apre il laboratorio con quella scheda del pannello destro già
   selezionata (la card “Esercitazioni in classe” della homepage usa `?scheda=guide`).
+- `?modello=nave` — la centrale elettrica di bordo: due gruppi da 50 kVA a 440 V 60 Hz, neutro isolato. Il
+  pulsante “Avvia la centrale” avvia, sincronizza e mette in parallelo tutti i gruppi; dal pannello Proprietà di
+  ogni gruppo si fanno le singole manovre (avvia, sincronizza, chiudi, apri, ripristina).
 - Il progetto in corso viene salvato automaticamente nel browser; *Salva* / *Apri* usano file `.impianto.json`.
 
 ---
@@ -158,7 +173,8 @@ src/
   home/          homepage: icone e schede delle lezioni
   tutorial/      lezioni (lessons.js), regia dei passi (Tutorial.js), segnaposti 3D (Markers.js), pannello (CoachUI.js)
   sim/           simulatore: numeri complessi, risolutore MNA, motore degli eventi, tabelle normative, verifiche
-  catalog/defs/  definizione elettrica dei componenti (parametri, morsetti, elementi di circuito, logiche)
+  catalog/defs/  definizione elettrica dei componenti (parametri, morsetti, elementi di circuito, logiche);
+                 nautico.js = gruppo elettrogeno, controllo isolamento, relè di distacco carichi
   models/        modelli 3D procedurali (DIN modulari e industriali, dispositivi di campo, serigrafie)
   scene/         palcoscenico, aula e banco, instradamento cavi, vista del progetto, copertine, ottimizzazione
   interaction/   puntamento, strumenti (seleziona, cabla, misura, posiziona), mouse e tastiera
@@ -173,7 +189,8 @@ public/img/      immagini della homepage e copertine delle lezioni (ricavate dal
                  (classe-hero, classe-vr, classe-pc) sono immagini illustrative generate con l'AI (Canva,
                  19/10/2026), non fotografie reali: la homepage lo dichiara nella didascalia dell'hero
 tests/           collaudo in Node: simulatore (sim.test.mjs), lezioni del tutorial (lessons.test.mjs),
-                 esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove)
+                 esercitazioni (exercises.test.mjs: struttura, soluzioni che completano passi e prove),
+                 modulo nautico (nautico.test.mjs: sistema 440 V, IT, gruppi, parallelo, isola, distacco carichi)
 ```
 
 La parte elettrica (`src/sim`, `src/catalog/defs`, `src/core`) non dipende da Three.js: si collauda in Node e si può
@@ -229,15 +246,27 @@ La homepage e l'elenco delle lezioni del tutorial si aggiornano da soli.
 
 ## Modello di calcolo e semplificazioni
 
-- Regime sinusoidale a 50 Hz con fasori (valori efficaci); rete del distributore con impedenza ricavata dalla Icc
-  presunta; neutro a terra in cabina (1 Ω); dispersore dell'utente Re impostabile.
+- Regime sinusoidale con fasori (valori efficaci) alla tensione e frequenza del sistema dichiarato dalla sorgente;
+  rete del distributore con impedenza ricavata dalla Icc presunta; neutro a terra in cabina (1 Ω) nei sistemi
+  TT/TN-S, isolato tramite la resistenza di isolamento della rete (default 200 kΩ) nel sistema IT; dispersore Re
+  impostabile.
+- Gruppo elettrogeno: sorgente trifase con reattanza subtransitoria X″d (12–20 % sulla base Vll²/Sn), tensione e
+  frequenza nominali tenute dai regolatori fino alla potenza nominale; oltre, la frequenza di sbarra cala del 4 %
+  per ogni 100 % di sovraccarico (fino a −15 %). I gruppi in parallelo sono fasori allo stesso angolo (il
+  sincronismo è una regola, non una dinamica): un gruppo chiuso fuori fase ha un angolo diverso e produce una
+  corrente di circolazione che fa intervenire la sua protezione. Ripartizione del carico in proporzione a Sn
+  (impedenze interne). Protezioni di generatore semplificate: cortocircuito oltre 3 In con ritardo 0,3 s
+  (0,1 s se chiuso fuori fase), sovraccarico a tempo inverso con 1,5 In → ~2 min, inversione di potenza oltre
+  l'8 % di Pn per 2 s.
 - Resistività del rame a 70 °C (0,0214 Ω·mm²/m). Portate Iz: CEI-UNEL 35024/1, posa B1, PVC, 30 °C.
 - Curve di intervento **didattiche** (non di catalogo): magnetico a soglia fissa (B 4·In, C 7,5·In, D 15·In),
   termico a tempo inverso; limitatore del contatore oltre il 10% dopo alcuni secondi. La simulazione si può
   accelerare (×5, ×20) per osservare gli interventi termici.
 - Carichi a impedenza costante; motore con impedenza di rotore bloccato all'avviamento (≈ 6·In).
 - Le verifiche seguono CEI 64-8, CEI EN 60898-1, CEI EN 61008/61009 in forma semplificata: sono uno strumento
-  didattico, non sostituiscono il progetto di un impianto reale.
+  didattico, non sostituiscono il progetto di un impianto reale. Per gli impianti di bordo le prescrizioni dei
+  registri navali (controllo isolamento in IT, riserva n−1, protezione di generatore) sono riportate in forma
+  semplificata dal quaderno ABB QT12.
 
 ---
 

@@ -455,9 +455,56 @@ function motorModel(def, p, comp, terms) {
   };
 }
 
+// ── Gruppo diesel-generatore ────────────────────────────────────────────────────────
+function gensetModel(def, p, comp, terms) {
+  const g = new THREE.Group();
+  const D = 0.075; // sporgenza dalla parete
+  // basamento e motore diesel
+  mesh(new RoundedBoxGeometry(0.2, 0.012, D, 2, 0.002), MAT.industrialGrey, 0, -0.038, D / 2, g);
+  const block = mesh(new RoundedBoxGeometry(0.095, 0.06, D - 0.012, 3, 0.004), MAT.plasticDark, -0.045, -0.002, D / 2, g);
+  for (let i = 0; i < 4; i++) mesh(new THREE.BoxGeometry(0.012, 0.012, D - 0.02), MAT.industrialGrey, -0.08 + i * 0.023, 0.034, D / 2, g);
+  // alternatore (cilindro) con ventola
+  const alt = new THREE.MeshStandardMaterial({ color: 0x1f5fa8, roughness: 0.45, metalness: 0.2 });
+  const cyl = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.085, 28).rotateZ(Math.PI / 2), alt, 0.048, 0.002, D / 2, g);
+  const fan = mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.004, 6).rotateZ(Math.PI / 2), MAT.plasticDark, 0.094, 0.002, D / 2, g);
+  fan.userData.dynamic = true;
+  // quadretto di macchina con LED e targa
+  const panel = mesh(new RoundedBoxGeometry(0.05, 0.034, 0.008, 2, 0.002), MAT.plasticIvory, 0.06, -0.025, D - 0.004, g);
+  const led = mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.002, 12).rotateX(Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x113311, emissive: 0x22ff55, emissiveIntensity: 0 }), 0.078, -0.016, D + 0.0015, g);
+  led.userData.dynamic = true;
+  const pl = new Painter(50, 34, '#ebe8df', 8);
+  pl.text(comp.tag, -16, -8, 7, { weight: 800, color: '#111' });
+  pl.text(`${p.Sn} kVA`, 6, -8, 5, { weight: 800, color: '#0f3d80' });
+  pl.text(p.net === 'nave690' ? '690 V 60 Hz' : p.net === 'it230' ? '400 V 50 Hz' : '440 V 60 Hz', 0, 4, 4.2, { weight: 700, color: '#222' });
+  pl.text(`neutro ${p.earth}`, 0, 10.5, 3.6, { weight: 600, color: '#555' });
+  const lab = new THREE.Mesh(new THREE.PlaneGeometry(0.048, 0.032), new THREE.MeshStandardMaterial({ map: pl.texture(), roughness: 0.55, polygonOffset: true, polygonOffsetFactor: -2 }));
+  lab.position.set(0.06, -0.025, D + 0.0003);
+  g.add(lab);
+  void block;
+  void cyl;
+  const strip = terminalStrip(terms, comp.tag, 0.085);
+  g.add(strip.group);
+  let angle = 0;
+  return {
+    group: g,
+    terminals: strip.terminals,
+    parts: {},
+    interactive: [],
+    update(inst, dt, t) {
+      if (!inst) return;
+      const s = inst.state;
+      if (s.running) angle += dt * 18;
+      fan.rotation.x = angle;
+      const col = s.trip ? 0xff3322 : s.closed ? 0x22ff55 : 0xffb020;
+      led.material.emissive.setHex(col);
+      setEmissive(led, s.trip ? (Math.sin(t * 8) > 0 ? 2.5 : 0.3) : s.running ? (s.closed ? 2.2 : Math.sin(t * 4) > 0 ? 2 : 0.4) : 0);
+    },
+  };
+}
+
 export function buildFieldModel(def, params, comp) {
   const terms = def.terminals(params);
-  const map = { lamp: lampModel, xs: socketModel, sa: switchModel, sd: switchModel, si: switchModel, sp: switchModel, ss: stationModel, pir: pirModel, hb: bellModel, m3: motorModel };
+  const map = { lamp: lampModel, xs: socketModel, sa: switchModel, sd: switchModel, si: switchModel, sp: switchModel, ss: stationModel, pir: pirModel, hb: bellModel, m3: motorModel, genset: gensetModel };
   const fn = map[def.type];
   const m = fn(def, params, comp, terms);
   m.type = def.type;

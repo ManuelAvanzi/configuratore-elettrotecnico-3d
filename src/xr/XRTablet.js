@@ -88,10 +88,9 @@ export class XRTablet {
       const col = this.msg.level === 'error' ? UI.error : this.msg.level === 'warn' ? UI.warn : this.msg.level === 'ok' ? UI.ok : UI.muted;
       p.text(this.msg.text, 1000, 50, { size: 20, color: col, align: 'right', maxW: 560 });
     } else {
-      const sup = app.sim.getInst('XA')?.state;
-      const on = sup?.on && !sup?.limiter;
-      p.rect(760, 30, 16, 16, sup?.limiter ? UI.error : on ? UI.ok : UI.dim, 8);
-      p.text(sup?.limiter ? 'Contatore distaccato' : on ? 'Impianto alimentato' : 'Non alimentato', 786, 39, { size: 20, color: UI.muted });
+      const sup = app.sim.powerState();
+      p.rect(760, 30, 16, 16, sup.fault ? UI.error : sup.on ? UI.ok : UI.dim, 8);
+      p.text(sup.label, 786, 39, { size: 20, color: UI.muted });
     }
     // Schede
     TABS.forEach((t, i) => p.button('tab-' + t.id, 20 + i * 248, 104, 236, 64, { label: t.label, icon: t.icon, active: this.tab === t.id, small: true, onClick: () => { this.tab = t.id; this.panel.dirty = true; } }));
@@ -190,12 +189,12 @@ export class XRTablet {
   drawSim(y) {
     const p = this.panel;
     const app = this.app;
-    const s = app.sim.getInst('XA').state;
-    const on = s.on && !s.limiter;
-    p.button('power', 20, y, 480, 120, { label: s.limiter ? 'Riarma contatore' : on ? 'Scollega impianto' : 'Alimenta impianto', icon: 'power', active: on, color: s.limiter ? UI.error : UI.ok, onClick: () => app.togglePower() });
+    const s = app.sim.powerState();
+    const on = s.on;
+    p.button('power', 20, y, 480, 120, { label: s.action, icon: 'power', active: on, color: s.fault ? UI.error : UI.ok, onClick: () => app.togglePower() });
     p.button('reset', 520, y, 484, 120, { label: 'Riarma protezioni', icon: 'reset', onClick: () => app.resetAll() });
     y += 140;
-    const vln = app.sim.measureV({ c: 'XA', t: 'L1' }, { c: 'XA', t: 'N' });
+    const vln = s.V;
     [['Tensione', fmtV(vln)], ['Corrente', fmtA(Math.max(...s.I))], ['Potenza', fmtW(s.P)], ['Energia', `${fmt(s.kWh, 3)} kWh`]].forEach(([l, v], i) => {
       const x = 20 + i * 248;
       p.rect(x, y, 236, 104, UI.panel, 14);

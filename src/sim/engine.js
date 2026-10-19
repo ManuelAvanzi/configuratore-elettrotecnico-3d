@@ -3,7 +3,7 @@
 // le grandezze lente (bimetalli, timer, avviamento motori, limitatore del contatore).
 import { solveNetwork } from './mna.js';
 import { ZERO, C, cabs, csub, cmul, cinv } from './complex.js';
-import { RHO_CU, R_CONTACT } from './norms.js';
+import { RHO_CU, R_CONTACT, DEFAULT_SYS } from './norms.js';
 import { resolveParams } from '../catalog/defs/common.js';
 
 class UnionFind {
@@ -33,7 +33,9 @@ export class Simulator {
     this.defs = defs;
     this.inst = new Map();
     this.wires = [];
-    this.env = { lux: 400, time: 0 };
+    this.env = { lux: 400, time: 0, sys: { ...DEFAULT_SYS } };
+    this.sourceIds = []; // sorgenti di energia (arrivo linea, gruppi elettrogeni)
+    this.bus = new Map(); // isole di rete alimentate da generatori: radice → { f, loading, S, Sn, gens }
     this.dirty = true;
     this.version = 0;
     this.net = null;
@@ -65,6 +67,11 @@ export class Simulator {
       seen.add(c.id);
     }
     for (const id of [...this.inst.keys()]) if (!seen.has(id)) this.inst.delete(id);
+    // sistema di rete (tensione, frequenza, messa a terra) dichiarato dalla sorgente principale
+    this.sourceIds = [...this.inst.values()].filter((i) => i.def.source).map((i) => i.id);
+    const main = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply')) || this.inst.get(this.sourceIds[0]);
+    const sys = main?.def.system ? main.def.system(main.params) : { ...DEFAULT_SYS };
+    this.env.sys = { ...DEFAULT_SYS, ...sys, fBus: sys.f };
     this.wires = project.wires.map((w) => ({ id: w.id, a: w.a, b: w.b, section: w.section, fault: w.fault, len: this.lengthOf(w) }));
     this.dirty = true;
   }
@@ -141,13 +148,128 @@ export class Simulator {
     }
     const gRoot = uf.find(G);
     const done = new Set();
+    const root = new Int32Array(n);
     for (let i = 0; i < n; i++) {
       const r = uf.find(i);
+      root[i] = r;
       if (r === gRoot || done.has(r)) continue;
       done.add(r);
       els.push({ kind: 'Y', a: i, b: -1, y: C(1e-6, 0), key: '#ref' + i });
     }
-    return { n, nodes, els, byKey };
+    return { n, nodes, els, byKey, root };
+  }
+
+  // ── Isole di rete, sbarre e sorgenti ──────────────────────────────────────────────
+  /** Radice dell'isola di rete (insieme di nodi collegati) a cui appartiene un morsetto; -1 se non in rete */
+  islandOf(compId, term) {
+    const i = this.net?.nodes.get(compId + '.' + term);
+    return i === undefined ? -1 : this.net.root[i];
+  }
+
+  /** Stato della sbarra alimentata da generatori a cui è collegato il morsetto (null se alimentata dalla rete) */
+  busAt(compId, term) {
+    const r = this.islandOf(compId, term);
+    return r < 0 ? null : this.bus.get(r) || null;
+  }
+
+  /**
+   * Aggiorna le sbarre: per ogni isola con gruppi elettrogeni in parallelo calcola carico complessivo e
+   * frequenza (rete in isola: oltre la potenza nominale il regolatore non tiene e la frequenza cala).
+   */
+  updateBuses() {
+    this.bus = new Map();
+    const fn = this.env.sys.f;
+    for (const inst of this.inst.values()) {
+      if (inst.type !== 'genset' || !inst.state.running || !inst.state.closed) continue;
+      const r = this.islandOf(inst.id, 'L1');
+      if (r < 0) continue;
+      let b = this.bus.get(r);
+      if (!b) this.bus.set(r, (b = { f: fn, loading: 0, S: 0, Sn: 0, gens: [] }));
+      b.gens.push(inst.id);
+      b.S += inst.state.S || 0;
+      b.Sn += inst.params.Sn * 1000;
+    }
+    let fmin = fn;
+    for (const b of this.bus.values()) {
+      b.loading = b.Sn ? b.S / b.Sn : 0;
+      b.f = fn * Math.max(0.85, 1 - 0.04 * Math.max(0, b.loading - 1));
+      fmin = Math.min(fmin, b.f);
+    }
+    this.env.sys.fBus = fmin;
+  }
+
+  /** Corrente complessiva che rientra dalla terra attraverso i dispersori delle sorgenti (= corrente di guasto a terra) */
+  earthLeakage() {
+    let sum = 0;
+    for (const id of this.sourceIds) sum += cabs(this.I(id + '/re'));
+    return sum;
+  }
+
+  /**
+   * Resistenza di isolamento verso massa “misurata”: tensione del conduttore più vicino a massa diviso la
+   * corrente che rientra dalla terra (come fa un controllore di isolamento). Infinity a rete sana.
+   */
+  insulationResistance() {
+    if (!this.net) return Infinity;
+    const src = this.sourceIds.map((id) => this.inst.get(id)).find((i) => i?.params.earth === 'IT');
+    if (!src) return Infinity;
+    const star = this.net.nodes.get(src.id + (src.type === 'supply' ? '.#s' : '.#g'));
+    if (star === undefined) return Infinity;
+    // rete passiva (generatori a tensione nulla) + iniezione di 1 A tra il centro stella e la massa
+    const els = this.net.els.map((e) => (e.kind === 'N' ? { ...e, is: ZERO } : e));
+    els.push({ kind: 'N', a: star, b: -1, y: C(1e-12, 0), is: C(1, 0) });
+    const res = solveNetwork(this.net.n, els);
+    if (!res.ok) return Infinity;
+    const v = Math.hypot(res.v[2 * star], res.v[2 * star + 1]);
+    return v > 5e6 ? Infinity : v; // R = V / 1 A
+  }
+
+  /** Resistenza di isolamento verso terra della rete sana (sorgenti a neutro isolato in parallelo), Infinity se il neutro è a terra */
+  insulationBase() {
+    let g = 0;
+    for (const id of this.sourceIds) {
+      const inst = this.inst.get(id);
+      if (inst?.params.earth === 'IT') g += 1 / ((inst.params.Rins || 200) * 1000);
+    }
+    return g > 0 ? 1 / g : Infinity;
+  }
+
+  /** Accende/spegne tutte le sorgenti (arrivo linea: contatore; gruppi: avvio + sincronizzazione + chiusura) */
+  setPower(on, { settle = true } = {}) {
+    for (const id of this.sourceIds) {
+      const inst = this.inst.get(id);
+      if (inst.def.setPower) inst.def.setPower(inst, on);
+      else inst.state.on = on;
+    }
+    if (settle) this.settle();
+  }
+
+  /** Riassunto dello stato di alimentazione per l'interfaccia (contatore o centrale di bordo) */
+  powerState() {
+    const sup = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply'));
+    if (sup) {
+      const s = sup.state;
+      return { kind: 'supply', on: s.on && !s.limiter, fault: s.limiter, P: s.P, kWh: s.kWh, I: s.I, V: this.mainVoltage(), label: s.limiter ? 'Contatore distaccato' : s.on ? 'Impianto alimentato' : 'Impianto non alimentato', action: s.limiter ? 'Riarma contatore' : s.on ? 'Scollega impianto' : 'Alimenta impianto' };
+    }
+    const gens = this.sourceIds.map((id) => this.inst.get(id)).filter((i) => i.type === 'genset');
+    if (!gens.length) return { kind: 'none', on: false, fault: false, P: 0, kWh: 0, I: [0, 0, 0], V: 0, label: 'Nessuna sorgente', action: 'Alimenta impianto' };
+    const live = gens.filter((g) => g.state.running && g.state.closed);
+    const fault = gens.some((g) => g.state.trip);
+    const I = [0, 1, 2].map((k) => live.reduce((m, g) => Math.max(m, g.state.I?.[k] || 0), 0));
+    const P = live.reduce((a, g) => a + (g.state.P || 0), 0);
+    const kWh = gens.reduce((a, g) => a + (g.state.kWh || 0), 0);
+    const n = live.length;
+    const label = fault ? 'Gruppo scattato' : n === 1 ? 'Un gruppo in servizio' : n > 1 ? n + ' gruppi in parallelo' : gens.some((g) => g.state.running) ? 'Gruppo in moto, sbarra aperta' : 'Centrale ferma';
+    return { kind: 'genset', on: n > 0, fault, P, kWh, I, V: this.mainVoltage(), label, action: n ? 'Ferma la centrale' : 'Avvia la centrale', fBus: this.env.sys.fBus };
+  }
+
+  /** Tensione fase-neutro ai morsetti della sorgente principale (o della prima sbarra in tensione) */
+  mainVoltage() {
+    const sup = this.inst.get(this.sourceIds.find((id) => this.inst.get(id).type === 'supply'));
+    if (sup) return this.measureV({ c: sup.id, t: 'L1' }, { c: sup.id, t: 'N' });
+    let best = 0;
+    for (const id of this.sourceIds) best = Math.max(best, this.measureV({ c: id, t: 'L1' }, { c: id, t: 'N' }));
+    return best;
   }
 
   solve() {
@@ -230,6 +352,7 @@ export class Simulator {
       this.solve();
       if (!this.muted) this.emit({ level: 'warn', text: 'Circuito instabile: un contattore o un relè si eccita e si diseccita di continuo (ronzio). Controlla il circuito di comando.', sound: 'hum' });
     }
+    this.updateBuses();
     this.dirty = false;
     this.version++;
     return iter;
@@ -318,9 +441,7 @@ export class Simulator {
           }
           this.settle();
         } else if (st.power !== undefined) {
-          const sup = [...this.inst.values()].find((i) => i.type === 'supply');
-          if (sup) Object.assign(sup.state, { on: st.power, limiter: false });
-          this.settle();
+          this.setPower(st.power);
         } else if (st.act) {
           const [id, action, phase] = st.act;
           const inst = this.inst.get(id);

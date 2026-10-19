@@ -19,6 +19,12 @@ const ACTIONS = {
   press: { icon: 'pointer', label: () => 'Premi', momentary: true },
   start: { icon: 'play', label: () => 'MARCIA', momentary: true },
   stop: { icon: 'pause', label: () => 'ARRESTO', momentary: true },
+  genStart: { icon: 'play', label: () => 'Avvia il gruppo' },
+  genStop: { icon: 'pause', label: () => 'Ferma il gruppo' },
+  sync: { icon: 'refresh', label: () => 'Sincronizza' },
+  close: { icon: 'plugzap', label: () => 'Chiudi sulla sbarra' },
+  open: { icon: 'unplug', label: () => 'Apri l’interruttore' },
+  resetTrip: { icon: 'reset', label: () => 'Ripristina protezione' },
 };
 
 export class RightPanel {

@@ -163,8 +163,7 @@ export class App extends Emitter {
     this.interaction.setTool('select');
     this.project.load(data, opts);
     this.flags = { limiter: false, rcdTrip: false, presented: false, reported: false, seen: {} };
-    const sup = this.sim.getInst('XA');
-    if (sup) sup.state.on = false;
+    this.sim.setPower(false, { settle: false });
   }
 
   startExercise(id) {
@@ -322,12 +321,28 @@ export class App extends Emitter {
 
   // ── Simulazione ───────────────────────────────────────────────────────────────────
   togglePower() {
-    const r = this.sim.interact('XA', 'power');
-    if (r?.sound) this.sfx(r.sound);
-    if (r?.msg) this.toast(r.msg, 'info');
-    this.world.updateMeterDisplay(this.sim.getInst('XA').state);
+    const sup = this.sim.sourceIds.map((id) => this.sim.getInst(id)).find((i) => i?.type === 'supply');
+    if (sup) {
+      const r = this.sim.interact(sup.id, 'power');
+      if (r?.sound) this.sfx(r.sound);
+      if (r?.msg) this.toast(r.msg, 'info');
+    } else {
+      // centrale di gruppi elettrogeni: scorciatoia “tutti in moto, sincronizzati e in parallelo”
+      const on = !this.sim.powerState().on;
+      this.sim.setPower(on);
+      this.sfx(on ? 'switch-on' : 'switch-off');
+      if (this.sim.sourceIds.length) this.toast(on ? 'Centrale avviata: gruppi in moto, sincronizzati e in parallelo sulla sbarra.' : 'Centrale fermata: interruttori di macchina aperti, gruppi fermi.', 'info');
+      else this.toast('Nessuna sorgente: aggiungi un gruppo elettrogeno dalla libreria (pannello utenze).', 'warn');
+    }
+    this.world.updateMeterDisplay(this.meterState());
     this.checksPanel?.schedule();
     this.emit('sim');
+  }
+
+  /** Stato dell'alimentazione per il contatore 3D e i pannelli (contatore o centrale di bordo) */
+  meterState() {
+    const ps = this.sim.powerState();
+    return { on: ps.on, limiter: ps.fault, P: ps.P };
   }
 
   resetAll() {
@@ -349,6 +364,12 @@ export class App extends Emitter {
       if (inst.type === 'supply' && s.limiter) {
         s.limiter = false;
         s.on = true;
+        n++;
+      }
+      if (inst.type === 'genset' && s.trip) {
+        s.trip = null;
+        s.closedUnsynced = false;
+        s.theta = Math.min(s.theta || 0, 0.5);
         n++;
       }
     }
@@ -456,8 +477,7 @@ export class App extends Emitter {
     this.meterT = (this.meterT || 0) + dt;
     if (this.meterT > 0.3) {
       this.meterT = 0;
-      const sup = this.sim.getInst('XA');
-      if (sup) this.world.updateMeterDisplay(sup.state);
+      this.world.updateMeterDisplay(this.meterState());
       let hum = 0;
       for (const i of this.sim.inst.values()) if (i.type === 'm3' && i.state.mode !== 'stop') hum += i.state.mode === 'stall' ? 1.6 : 1;
       this.sfxEngine.setMotorHum(Math.min(2, hum));

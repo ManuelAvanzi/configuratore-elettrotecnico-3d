@@ -2,8 +2,9 @@
 // Ogni verifica restituisce { id, group, level: 'ok'|'warn'|'error'|'info', title, detail, comps[], wires[] }.
 import { DEFS } from '../catalog/defs/index.js';
 import { resolveParams } from '../catalog/defs/common.js';
-import { iz, V_PHASE, UL, fmt, fmtA, fmtW } from './norms.js';
+import { iz, UL, DEFAULT_SYS, fmt, fmtA, fmtW } from './norms.js';
 import { cabs, csub } from './complex.js';
+import { gensetRated } from '../catalog/defs/nautico.js';
 
 const key = (r) => r.c + '.' + r.t;
 
@@ -48,13 +49,13 @@ function bfs(g, starts, allow) {
   return { seen, parent };
 }
 
-/** Componenti attraversati lungo il percorso più breve dal morsetto di partenza alla fornitura */
-function upstreamChain(g, startNode, supplyId) {
+/** Componenti attraversati lungo il percorso più breve dal morsetto di partenza a una sorgente */
+function upstreamChain(g, startNode, sourceIds) {
   const { seen, parent } = bfs(g, [startNode]);
   let target = null;
   for (const n of seen) {
     const inf = g.info.get(n);
-    if (inf && inf.comp.id === supplyId && inf.term.role === 'L') {
+    if (inf && sourceIds.has(inf.comp.id) && inf.term.role === 'L') {
       target = n;
       break;
     }
@@ -70,10 +71,27 @@ function upstreamChain(g, startNode, supplyId) {
   return chain; // dal lato fornitura verso l'utenza
 }
 
-function loadCurrent(l) {
+function loadCurrent(l, sys = DEFAULT_SYS) {
   if (!l || !l.P) return 0;
-  if (l.phases === 3) return l.In || l.P / (Math.sqrt(3) * 400 * (l.cos || 1));
-  return l.P / (V_PHASE * (l.cos || 1));
+  if (l.phases === 3) return l.P / (Math.sqrt(3) * sys.Vll * (l.cos || 1));
+  return l.P / (sys.Vph * (l.cos || 1));
+}
+
+/** Parametri “di fornitura” equivalenti quando la sorgente è una centrale di gruppi elettrogeni */
+function gensetSupply(gensets) {
+  let Icc = 0;
+  let Sn = 0;
+  let Re = Infinity;
+  let earth = 'IT';
+  for (const c of gensets) {
+    const p = resolveParams(DEFS.genset, c.params);
+    const r = gensetRated(p);
+    Icc += r.Icc;
+    Sn += r.Sn;
+    Re = Math.min(Re, p.Re);
+    earth = p.earth === 'TN' ? 'TN-S' : p.earth;
+  }
+  return { sys: '3F', earth, Icc: Icc / 1000, Re: Number.isFinite(Re) ? Re : 1, Pc: null, Sn };
 }
 
 export const CHECK_GROUPS = [
@@ -87,19 +105,27 @@ export function runChecks(project, sim) {
   const g = buildGraph(project);
   const out = [];
   const push = (r) => out.push({ comps: [], wires: [], ...r });
-  const supplyComp = project.components.find((c) => c.type === 'supply');
-  const sp = resolveParams(DEFS.supply, supplyComp.params);
+  const sources = project.components.filter((c) => DEFS[c.type]?.source);
+  const sourceIds = new Set(sources.map((c) => c.id));
+  const supplyComp = sources.find((c) => c.type === 'supply') || null;
+  const gensets = sources.filter((c) => c.type === 'genset');
+  const sp = supplyComp ? resolveParams(DEFS.supply, supplyComp.params) : gensetSupply(gensets);
+  const sys = sim?.env?.sys || DEFAULT_SYS;
   const tag = (id) => project.comp(id)?.tag || id;
-  const is3F = sp.sys === '3F';
 
   const loads = g.comps.filter((x) => x.load);
-  const protections = g.comps.filter((x) => x.prot && x.prot.kind !== 'isolator');
+  const protections = g.comps.filter((x) => x.prot && x.prot.kind !== 'isolator' && x.prot.kind !== 'generator');
   const overcurrent = (x) => x.prot && x.prot.overcurrent && !x.prot.overloadOnly;
 
-  // ── Collegamento alla fornitura ─────────────────────────────────────────────────
-  const supplyWired = project.wires.some((w) => (w.a.c === supplyComp.id && w.a.t !== 'PE') || (w.b.c === supplyComp.id && w.b.t !== 'PE'));
-  if (!supplyWired) {
-    push({ id: 'supply', group: 'esercizio', level: 'info', title: 'Impianto non ancora collegato all’arrivo linea', detail: 'Collega i morsetti di uscita dell’arrivo linea (XA) all’interruttore generale.' , comps: [supplyComp.id] });
+  // ── Collegamento alla sorgente ──────────────────────────────────────────────────
+  if (!sources.length) {
+    push({ id: 'supply', group: 'esercizio', level: 'warn', title: 'Impianto senza sorgente di energia', detail: 'Aggiungi un gruppo elettrogeno (pannello) o parti da un modello con l’arrivo linea.' });
+  }
+  for (const src of sources) {
+    const wired = project.wires.some((w) => (w.a.c === src.id && w.a.t !== 'PE') || (w.b.c === src.id && w.b.t !== 'PE'));
+    if (!wired) {
+      push({ id: 'supply-' + src.id, group: 'esercizio', level: 'info', title: src.type === 'supply' ? 'Impianto non ancora collegato all’arrivo linea' : `${src.tag}: gruppo non collegato alla sbarra`, detail: src.type === 'supply' ? 'Collega i morsetti di uscita dell’arrivo linea (XA) all’interruttore generale.' : 'Collega L1, L2, L3 (e N) del gruppo all’interruttore generale del quadro e il PE al collettore di terra.', comps: [src.id] });
+    }
   }
 
   // ── Colori dei conduttori ───────────────────────────────────────────────────────
@@ -159,7 +185,7 @@ export function runChecks(project, sim) {
     if (!lTerm) continue;
     const connected = project.wires.some((w) => w.a.c === x.c.id || w.b.c === x.c.id);
     if (!connected) continue;
-    const chain = upstreamChain(g, x.c.id + '.' + lTerm.id, supplyComp.id);
+    const chain = upstreamChain(g, x.c.id + '.' + lTerm.id, sourceIds);
     chains.set(x.c.id, chain);
     if (!chain) continue;
     const devs = chain.map((id) => g.byId.get(id)).filter(Boolean);
@@ -178,7 +204,9 @@ export function runChecks(project, sim) {
       }
       const rcds = devs.filter((d) => d.prot && (d.prot.kind === 'rcd' || d.prot.kind === 'rcbo'));
       const best = Math.min(...rcds.map((d) => d.prot.IDn), Infinity);
-      if (!rcds.length) {
+      if (!rcds.length && sp.earth === 'IT') {
+        push({ id: 'rcd-' + x.c.id, group: 'sicurezza', level: 'info', title: `${x.c.tag}: presa in sistema IT senza differenziale`, detail: 'Con il neutro isolato il primo guasto a terra non è pericoloso ed è segnalato dal controllo dell’isolamento (IEC 60092 per le navi). A terra la CEI 64-8 chiede comunque un differenziale ≤ 30 mA sulle prese.', comps: [x.c.id] });
+      } else if (!rcds.length) {
         push({ id: 'rcd-' + x.c.id, group: 'sicurezza', level: 'error', title: `${x.c.tag}: presa senza interruttore differenziale`, detail: 'Le prese a spina devono essere protette da un differenziale con IΔn ≤ 30 mA (protezione addizionale, CEI 64-8).', comps: [x.c.id] });
       } else if (best > 0.03) {
         push({ id: 'rcd-' + x.c.id, group: 'sicurezza', level: 'warn', title: `${x.c.tag}: differenziale non ad alta sensibilità`, detail: `A monte della presa c’è un differenziale da ${fmtA(best)}: per le prese serve IΔn ≤ 30 mA.`, comps: [x.c.id, ...rcds.map((d) => d.c.id)] });
@@ -233,7 +261,7 @@ export function runChecks(project, sim) {
     if (x.prot.kind === 'rcd') {
       // Il differenziale puro deve essere protetto da un magnetotermico a monte con In ≤ In(ID)
       const start = lineSide[0];
-      const chain = start ? upstreamChain(g, start, supplyComp.id) : null;
+      const chain = start ? upstreamChain(g, start, sourceIds) : null;
       const up = (chain || []).map((id) => g.byId.get(id)).filter((d) => d && d.c.id !== x.c.id && overcurrent(d));
       if (chain && !up.length) {
         push({ id: 'rcdoc-' + x.c.id, group: 'dimensionamento', level: 'warn', title: `${x.c.tag}: differenziale puro senza magnetotermico a monte`, detail: 'Il differenziale puro non protegge dalle sovracorrenti: a monte serve un magnetotermico con In non superiore alla sua corrente nominale.', comps: [x.c.id] });
@@ -257,7 +285,7 @@ export function runChecks(project, sim) {
       if (l.c.id === x.c.id) continue;
       const lt = l.terms.filter((t) => t.role === 'L').map((t) => l.c.id + '.' + t.id);
       if (lt.some((n) => all.seen.has(n))) {
-        Ib += loadCurrent(l.load);
+        Ib += loadCurrent(l.load, sys);
         fed.push(l);
       }
     }
@@ -299,8 +327,50 @@ export function runChecks(project, sim) {
     }
   }
 
+  // ── Sistema IT: controllo dell'isolamento obbligatorio ──────────────────────────
+  if (sp.earth === 'IT' && sources.length) {
+    const imds = g.comps.filter((x) => x.def.type === 'imd' && project.wires.some((w) => w.a.c === x.c.id || w.b.c === x.c.id));
+    if (!imds.length) {
+      push({ id: 'it-imd', group: 'sicurezza', level: 'error', title: 'Sistema IT senza dispositivo di controllo dell’isolamento', detail: 'Con il neutro isolato un primo guasto a terra non fa intervenire le protezioni e passa inosservato: i registri navali (e la CEI 64-8) richiedono un dispositivo che controlli l’isolamento e dia allarme.' });
+    } else {
+      push({ id: 'it-imd', group: 'sicurezza', level: 'ok', title: 'Controllo dell’isolamento presente (sistema IT)', detail: `${imds.map((x) => x.c.tag).join(', ')}: al primo guasto a terra dà allarme e l’impianto resta in servizio.`, comps: imds.map((x) => x.c.id) });
+    }
+  }
+
+  // ── Centrale di gruppi elettrogeni: potenza e riserva n−1 ───────────────────────
+  if (gensets.length) {
+    const rated = gensets.map((c) => ({ c, r: gensetRated(resolveParams(DEFS.genset, c.params)) }));
+    const SnTot = rated.reduce((a, x) => a + x.r.Sn, 0);
+    const SnMax = Math.max(...rated.map((x) => x.r.Sn));
+    const instLoads = loads.filter((l) => project.wires.some((w) => w.a.c === l.c.id || w.b.c === l.c.id));
+    const Sload = instLoads.reduce((a, l) => a + (l.load.P || 0) / Math.max(0.3, l.load.cos || 1), 0);
+    if (instLoads.length) {
+      push({
+        id: 'gen-cap',
+        group: 'esercizio',
+        level: Sload > SnTot ? 'error' : Sload > 0.9 * SnTot ? 'warn' : 'ok',
+        title: 'Potenza installata e potenza dei generatori',
+        detail: `Utenze ${fmtW(Sload).replace('W', 'VA')} contro ${fmtW(SnTot).replace('W', 'VA')} di generatori (${gensets.length} grupp${gensets.length === 1 ? 'o' : 'i'}). ${Sload > SnTot ? 'Con tutti i carichi accesi la centrale è in sovraccarico.' : Sload > 0.9 * SnTot ? 'Margine scarso: i generatori lavorano al meglio attorno al 75 %.' : 'Il punto di lavoro ottimale dei generatori è attorno al 75 % della potenza nominale.'}`,
+        comps: gensets.map((c) => c.id),
+      });
+      if (gensets.length > 1) {
+        const rest = SnTot - SnMax;
+        push({
+          id: 'gen-n1',
+          group: 'esercizio',
+          level: Sload > rest ? 'warn' : 'ok',
+          title: 'Riserva con un gruppo in avaria (n−1)',
+          detail: `Con il gruppo più grande fuori servizio restano ${fmtW(rest).replace('W', 'VA')}: ${Sload > rest ? 'non bastano per tutte le utenze — servono il distacco dei carichi non essenziali o più potenza installata.' : 'sufficienti per tutte le utenze.'}`,
+          comps: gensets.map((c) => c.id),
+        });
+      } else {
+        push({ id: 'gen-n1', group: 'esercizio', level: 'warn', title: 'Un solo gruppo: nessuna riserva', detail: 'A bordo la continuità di servizio richiede almeno due gruppi (o un gruppo di emergenza) per i carichi essenziali.', comps: gensets.map((c) => c.id) });
+      }
+    }
+  }
+
   // ── Interruttori sul neutro ─────────────────────────────────────────────────────
-  const nNet = bfs(g, [supplyComp.id + '.N']).seen;
+  const nNet = bfs(g, sources.map((c) => c.id + '.N')).seen;
   for (const x of g.comps) {
     if (!['sa', 'sd', 'si'].includes(x.def.type)) continue;
     if (x.terms.some((t) => nNet.has(x.c.id + '.' + t.id))) {
@@ -311,7 +381,7 @@ export function runChecks(project, sim) {
   // ── Potenza installata / contrattuale ───────────────────────────────────────────
   const inst = loads.filter((l) => project.wires.some((w) => w.a.c === l.c.id || w.b.c === l.c.id));
   const Ptot = inst.reduce((s, l) => s + (l.load.P || 0), 0);
-  if (inst.length) {
+  if (inst.length && supplyComp) {
     const Pdisp = sp.Pc * 1100;
     push({
       id: 'power',
@@ -334,7 +404,7 @@ export function runChecks(project, sim) {
       const hasLoad = l.load.P > 0;
       if (v < 100 || !hasLoad) continue;
       measured++;
-      const dv = ((V_PHASE - v) / V_PHASE) * 100;
+      const dv = ((sys.Vph - v) / sys.Vph) * 100;
       push({
         id: 'dv-' + l.c.id,
         group: 'esercizio',

@@ -21,8 +21,7 @@ export class LimBoard {
     if (this.t < 1) return;
     this.t = 0;
     const app = this.app;
-    const sup = app.sim.getInst('XA');
-    if (!sup) return;
+    const ps = app.sim.powerState();
     if (!app.isLab) return this.updateTutorial();
     const prot = app.project.components.filter((c) => DEFS[c.type].protection || c.type === 'km3' || c.type === 'km2m');
     const rows = prot.map((c) => {
@@ -31,10 +30,10 @@ export class LimBoard {
     });
     const res = app.checksPanel?.results || [];
     const ex = app.project.meta.exercise?.id ? exerciseById(app.project.meta.exercise.id) : null;
-    const sig = JSON.stringify([sup.state.on, sup.state.limiter, Math.round(sup.state.P / 10), Math.round(sup.state.kWh * 1000), rows, summarize(res), res.slice(0, 5).map((r) => r.id), app.project.meta.title, ex?.id, app.guide.stepState, app.sim.events.at(-1)?.text]);
+    const sig = JSON.stringify([ps.on, ps.fault, ps.label, Math.round(ps.P / 10), Math.round(ps.kWh * 1000), Math.round(ps.V), rows, summarize(res), res.slice(0, 5).map((r) => r.id), app.project.meta.title, ex?.id, app.guide.stepState, app.sim.events.at(-1)?.text]);
     if (sig === this.sig) return;
     this.sig = sig;
-    this.draw(sup.state, prot, res, ex);
+    this.draw(ps, prot, res, ex);
   }
 
   draw(s, prot, res, ex) {
@@ -55,16 +54,16 @@ export class LimBoard {
     g.fillText(sub, 62, 112);
 
     // Alimentazione
-    const on = s.on && !s.limiter;
+    const on = s.on;
     this.card(g, 40, 160, 560, 400, 'ALIMENTAZIONE', 'power');
-    g.fillStyle = s.limiter ? '#ff5d62' : on ? '#38c77f' : '#6f7a86';
+    g.fillStyle = s.fault ? '#ff5d62' : on ? '#38c77f' : '#6f7a86';
     g.beginPath();
     g.arc(90, 262, 16, 0, Math.PI * 2);
     g.fill();
     g.fillStyle = '#e9eef3';
     g.font = '700 36px Manrope, Arial';
-    g.fillText(s.limiter ? 'Contatore distaccato' : on ? 'Impianto alimentato' : 'Non alimentato', 122, 275);
-    const vln = app.sim.measureV({ c: 'XA', t: 'L1' }, { c: 'XA', t: 'N' });
+    g.fillText(s.label, 122, 275);
+    const vln = s.V;
     const big = (label, value, x, y) => {
       g.fillStyle = '#6f7a86';
       g.font = '700 22px Manrope, Arial';

@@ -7,7 +7,12 @@ import { LAYOUT } from './layout.js';
 
 export const PROJECT_VERSION = 1;
 
-export function blankProject({ sys = '1F', title = 'Nuovo impianto', earth = 'TT' } = {}) {
+/**
+ * Progetto vuoto. `source`: 'supply' (arrivo linea del distributore, default) oppure 'none' (nessuna sorgente:
+ * l'impianto di bordo la riceve dai gruppi elettrogeni aggiunti dall'utente).
+ */
+export function blankProject({ sys = '1F', title = 'Nuovo impianto', earth = 'TT', source = 'supply' } = {}) {
+  const withSupply = source !== 'none';
   return {
     app: 'configuratore-elettrotecnico-3d',
     version: PROJECT_VERSION,
@@ -20,12 +25,13 @@ export function blankProject({ sys = '1F', title = 'Nuovo impianto', earth = 'TT
       description: '',
       justifications: {}, // risposte alle domande di giustificazione delle scelte (JUSTIFICATIONS)
       exercise: null,
+      source, // 'supply' (arrivo linea) o 'none' (impianto di bordo: le sorgenti le aggiunge l'utente)
     },
     components: [
-      { id: 'XA', type: 'supply', tag: 'XA', mount: { kind: 'din', rail: 0, pos: 0 }, params: { sys, earth }, note: '' },
+      ...(withSupply ? [{ id: 'XA', type: 'supply', tag: 'XA', mount: { kind: 'din', rail: 0, pos: 0 }, params: { sys, earth }, note: '' }] : []),
       { id: 'PE', type: 'pebar', tag: 'PE', mount: { kind: 'fixed', at: 'pebar' }, params: {}, note: '' },
     ],
-    wires: [{ id: 'w0', a: { c: 'XA', t: 'PE' }, b: { c: 'PE', t: 'IN' }, color: 'yg', section: 16, fixed: true }],
+    wires: withSupply ? [{ id: 'w0', a: { c: 'XA', t: 'PE' }, b: { c: 'PE', t: 'IN' }, color: 'yg', section: 16, fixed: true }] : [],
     seq: 1,
   };
 }
@@ -36,11 +42,14 @@ function migrate(d) {
   if (!d.meta.justifications || typeof d.meta.justifications !== 'object') d.meta.justifications = {};
   d.components = Array.isArray(d.components) ? d.components.filter((c) => DEFS[c.type]) : [];
   d.wires = Array.isArray(d.wires) ? d.wires : [];
-  if (!d.components.find((c) => c.type === 'supply')) {
+  if (d.meta.source !== 'none' && !d.components.some((c) => DEFS[c.type]?.source)) {
+    // nessuna sorgente: progetti vecchi o corrotti ricevono l'arrivo linea (e il collettore di terra se manca)
     const b = blankProject();
+    d.components = d.components.filter((c) => c.type !== 'pebar');
     d.components.unshift(...b.components);
     d.wires.unshift(...b.wires);
   }
+  if (!d.components.some((c) => c.type === 'pebar')) d.components.push({ id: 'PE', type: 'pebar', tag: 'PE', mount: { kind: 'fixed', at: 'pebar' }, params: {}, note: '' });
   let max = 0;
   for (const x of [...d.components, ...d.wires]) {
     const m = /^[cw](\d+)$/.exec(x.id);
@@ -109,6 +118,19 @@ export class Project extends Emitter {
   }
   supply() {
     return this.data.components.find((c) => c.type === 'supply');
+  }
+  /** Sorgenti di energia del progetto (arrivo linea, gruppi elettrogeni) */
+  sources() {
+    return this.data.components.filter((c) => DEFS[c.type]?.source);
+  }
+  /** Sistema di rete del progetto: tensioni, frequenza, messa a terra, sigle delle sorgenti */
+  system() {
+    const srcs = this.sources();
+    const main = srcs.find((c) => c.type === 'supply') || srcs[0];
+    const def = main && DEFS[main.type];
+    const base = def?.system ? def.system(this.params(main.id)) : { Vph: 230, Vll: 400, f: 50, earth: 'TT' };
+    const sp = main ? this.params(main.id) : {};
+    return { ...base, sys: sp.sys || (main?.type === 'genset' ? '3F' : '1F'), Pc: sp.Pc ?? null, Icc: sp.Icc ?? null, Re: sp.Re ?? null, sources: srcs.map((c) => c.tag), kind: main?.type || 'none' };
   }
 
   // ── Annulla / ripeti ──────────────────────────────────────────────────────────────

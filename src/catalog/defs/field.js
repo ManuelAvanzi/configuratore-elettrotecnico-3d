@@ -1,7 +1,7 @@
 // Dispositivi di campo (pannello utenze): utilizzatori e comandi dell'impianto.
 import { sw, res, load, impPolar, T, P, distParam, clamp } from './common.js';
 import { cabs, cmul, cconj, csub, power } from '../../sim/complex.js';
-import { V_PHASE, APPLIANCES, applianceById, bodyZone, fmtA, fmtV, fmtW, fmt } from '../../sim/norms.js';
+import { V_PHASE, sysOf, APPLIANCES, applianceById, bodyZone, fmtA, fmtV, fmtW, fmt } from '../../sim/norms.js';
 
 // ── Lampada ──────────────────────────────────────────────────────────────────────────
 export const LAMP_TYPES = [
@@ -25,14 +25,15 @@ export const lamp = {
   params: [P.select('lt', 'Tipo di lampada', LAMP_TYPES.map(({ value, label }) => ({ value, label })), 'led10'), distParam(12)],
   terminals: () => [T('L', 'L', 'L', 'top', 0.33), T('N', 'N', 'N', 'top', 0.67)],
   init: () => ({ burnt: false }),
-  elements(inst) {
+  elements(inst, env) {
     if (inst.state.burnt) return [];
     const t = lampType(inst.params.lt);
-    return [load('z', 'L', 'N', t.P, t.cos)];
+    return [load('z', 'L', 'N', t.P, t.cos, sysOf(env).Vph)];
   },
   evaluate(inst, ctx) {
     const v = cabs(ctx.Vd('L', 'N'));
     const t = lampType(inst.params.lt);
+    const V_PHASE = sysOf(ctx.env).Vph;
     inst.state.V = v;
     if (inst.state.burnt) {
       inst.view.bright = 0;
@@ -55,6 +56,7 @@ export const lamp = {
   readouts(inst, ctx) {
     const v = cabs(ctx.Vd('L', 'N'));
     const i = cabs(ctx.I('z'));
+    const V_PHASE = sysOf(ctx.env).Vph;
     return [
       { label: 'Stato', value: inst.state.burnt ? 'BRUCIATA' : (inst.view.bright || 0) > 0.05 ? 'Accesa' : 'Spenta', level: inst.state.burnt ? 'error' : (inst.view.bright || 0) > 0.05 ? 'ok' : 'off' },
       { label: 'Tensione ai morsetti', value: fmtV(v) },
@@ -73,7 +75,9 @@ const FAULTS = [
   { value: 'd300', label: 'Dispersione verso la massa 300 mA' },
   { value: 'franco', label: 'Guasto franco a massa (isolamento rotto)' },
 ];
-const FAULT_R = { d10: V_PHASE / 0.01, d50: V_PHASE / 0.05, d300: V_PHASE / 0.3, franco: 0.5 };
+const FAULT_I = { d10: 0.01, d50: 0.05, d300: 0.3 };
+/** Resistenza del guasto: tale da far circolare la corrente indicata alla tensione di fase del sistema */
+const faultR = (g, Vph) => (g === 'franco' ? 0.5 : FAULT_I[g] ? Vph / FAULT_I[g] : null);
 export const R_BODY = 1000;
 
 export const xs = {
@@ -94,16 +98,18 @@ export const xs = {
   ],
   terminals: () => [T('L', 'L', 'L', 'top', 0.25), T('N', 'N', 'N', 'top', 0.5), T('PE', 'PE', 'PE', 'top', 0.75)],
   init: () => ({}),
-  elements(inst) {
+  elements(inst, env) {
     const p = inst.params;
     const a = applianceById(p.carico);
+    const Vph = sysOf(env).Vph;
     const els = [];
     if (a.id === 'none') return els;
     if (a.short) els.push(res('app', 'L', 'N', 0.02));
-    else els.push(load('app', 'L', 'N', a.P, a.cos));
+    else els.push(load('app', 'L', 'N', a.P, a.cos, Vph));
     if (a.cls === 'I') {
       els.push(sw('pe', '#m', 'PE', true)); // spina con polo di terra → massa dell'apparecchio
-      if (FAULT_R[p.guasto]) els.push(res('f', 'L', '#m', FAULT_R[p.guasto]));
+      const rf = faultR(p.guasto, Vph);
+      if (rf) els.push(res('f', 'L', '#m', rf));
     }
     if (p.persona && a.cls === 'I') els.push(res('body', '#m', 'GND', R_BODY));
     return els;
@@ -117,6 +123,7 @@ export const xs = {
     const p = inst.params;
     const a = applianceById(p.carico);
     const v = cabs(ctx.Vd('L', 'N'));
+    const V_PHASE = sysOf(ctx.env).Vph;
     const out = [{ label: 'Tensione alla presa', value: fmtV(v) }];
     if (a.id !== 'none') {
       const i = ctx.I('app');
@@ -264,10 +271,10 @@ export const pir = {
   params: [P.select('T', 'Tempo di mantenimento', [5, 10, 20, 30, 60], 10, { unit: 's' }), distParam(10)],
   terminals: () => [T('L', 'L', 'L', 'top', 0.25), T('N', 'N', 'N', 'top', 0.5), T('OUT', 'OUT', 'L', 'top', 0.75)],
   init: () => ({ remaining: 0, out: false, powered: false }),
-  elements: (inst) => [res('aux', 'L', 'N', (V_PHASE * V_PHASE) / 0.8), sw('c', 'L', 'OUT', inst.state.out)],
+  elements: (inst, env) => [res('aux', 'L', 'N', (sysOf(env).Vph ** 2) / 0.8), sw('c', 'L', 'OUT', inst.state.out)],
   evaluate(inst, ctx) {
     const s = inst.state;
-    s.powered = cabs(ctx.Vd('L', 'N')) > 0.8 * V_PHASE;
+    s.powered = cabs(ctx.Vd('L', 'N')) > 0.8 * sysOf(ctx.env).Vph;
     const out = s.powered && s.remaining > 0;
     if (out !== s.out) {
       s.out = out;
@@ -308,9 +315,9 @@ export const hb = {
   params: [distParam(10)],
   terminals: () => [T('1', '1', 'L', 'top', 0.35), T('2', '2', 'N', 'top', 0.65)],
   init: () => ({}),
-  elements: () => [load('z', '1', '2', 8, 0.6)],
+  elements: (inst, env) => [load('z', '1', '2', 8, 0.6, sysOf(env).Vph)],
   evaluate(inst, ctx) {
-    inst.view.ring = cabs(ctx.Vd('1', '2')) > 0.7 * V_PHASE;
+    inst.view.ring = cabs(ctx.Vd('1', '2')) > 0.7 * sysOf(ctx.env).Vph;
     return false;
   },
   load: () => ({ P: 8, cos: 0.6, phases: 1 }),
@@ -319,18 +326,23 @@ export const hb = {
 };
 
 // ── Motore asincrono trifase ─────────────────────────────────────────────────────────
-const MOTOR_DATA = { 0.37: [0.72, 0.7], 0.55: [0.75, 0.73], 0.75: [0.77, 0.77], 1.1: [0.79, 0.79], 1.5: [0.8, 0.81], 2.2: [0.81, 0.83], 3: [0.82, 0.84], 4: [0.83, 0.85] };
+const MOTOR_DATA = {
+  0.37: [0.72, 0.7], 0.55: [0.75, 0.73], 0.75: [0.77, 0.77], 1.1: [0.79, 0.79], 1.5: [0.8, 0.81], 2.2: [0.81, 0.83], 3: [0.82, 0.84], 4: [0.83, 0.85],
+  5.5: [0.84, 0.86], 7.5: [0.85, 0.87], 11: [0.86, 0.88], 15: [0.86, 0.89], 22: [0.87, 0.9], 30: [0.87, 0.91], 45: [0.88, 0.92], 75: [0.88, 0.93],
+};
+export const MOTOR_POWERS = Object.keys(MOTOR_DATA).map(Number);
 
-export function motorRated(p) {
+/** Dati di targa del motore alla tensione concatenata del sistema (400 V se non indicata) */
+export function motorRated(p, Vll = 400) {
   const [cos, eta] = MOTOR_DATA[p.P] || [0.8, 0.8];
   const Pel = (p.P * 1000) / eta;
-  const In = Pel / (Math.sqrt(3) * 400 * cos);
+  const In = Pel / (Math.sqrt(3) * Vll * cos);
   return { cos, eta, Pel, In };
 }
 
-function windingZ(p, mode) {
+function windingZ(p, mode, Vph) {
   const { cos, Pel } = motorRated(p);
-  const Zr = (3 * V_PHASE * V_PHASE * cos) / Pel; // |Z| di un avvolgimento a pieno carico (230 V per avvolgimento)
+  const Zr = (3 * Vph * Vph * cos) / Pel; // |Z| di un avvolgimento a pieno carico (tensione di fase per avvolgimento)
   if (mode !== 'run') return { mag: Zr / 6, phi: Math.acos(0.4) }; // rotore bloccato / avviamento
   const L = Math.max(0, p.load) / 100;
   // corrente ≈ 45% a vuoto, 100% a pieno carico; in sovraccarico cresce più che linearmente (aumenta lo scorrimento)
@@ -349,16 +361,16 @@ export const m3 = {
   tag: 'M',
   help: 'Motore con avvolgimenti da 230 V: a 400 V va collegato a STELLA. Il senso di rotazione dipende dalla sequenza delle fasi: scambiando due fasi si inverte. All’avviamento assorbe circa 6 volte la corrente nominale.',
   params: [
-    P.select('P', 'Potenza nominale', [0.37, 0.55, 0.75, 1.1, 1.5, 2.2, 3, 4], 0.75, { unit: 'kW' }),
+    P.select('P', 'Potenza nominale', MOTOR_POWERS, 0.75, { unit: 'kW' }),
     P.select('conn', 'Collegamento degli avvolgimenti', [{ value: 'Y', label: 'Stella (Y) — per rete a 400 V' }, { value: 'D', label: 'Triangolo (Δ) — per rete a 230 V' }], 'Y'),
     P.number('load', 'Carico meccanico', 0, 150, 5, 80, '%', { help: 'Oltre il 100% il motore è in sovraccarico: la corrente cresce e il relè termico deve intervenire.' }),
     distParam(20),
   ],
   terminals: () => [T('U1', 'U1', 'L', 'top', 0.3), T('V1', 'V1', 'L', 'top', 0.42), T('W1', 'W1', 'L', 'top', 0.54), T('PE', 'PE', 'PE', 'top', 0.68)],
   init: () => ({ mode: 'stop', t: 0, dir: 1, speed: 0, vline: [0, 0, 0] }),
-  elements(inst) {
+  elements(inst, env) {
     const p = inst.params;
-    const z = windingZ(p, inst.state.mode);
+    const z = windingZ(p, inst.state.mode, sysOf(env).Vph);
     const els = p.conn === 'D'
       ? [impPolar('wU', 'U1', 'V1', z.mag, z.phi), impPolar('wV', 'V1', 'W1', z.mag, z.phi), impPolar('wW', 'W1', 'U1', z.mag, z.phi)]
       : [impPolar('wU', 'U1', '#st', z.mag, z.phi), impPolar('wV', 'V1', '#st', z.mag, z.phi), impPolar('wW', 'W1', '#st', z.mag, z.phi)];
@@ -368,7 +380,8 @@ export const m3 = {
   evaluate(inst, ctx) {
     const s = inst.state;
     const p = inst.params;
-    const Vn = p.conn === 'D' ? V_PHASE : 400;
+    const sys = sysOf(ctx.env);
+    const Vn = p.conn === 'D' ? sys.Vph : sys.Vll;
     const uv = ctx.Vd('U1', 'V1');
     const vw = ctx.Vd('V1', 'W1');
     const wu = ctx.Vd('W1', 'U1');
@@ -428,7 +441,7 @@ export const m3 = {
   },
   readouts(inst, ctx) {
     const s = inst.state;
-    const r = motorRated(inst.params);
+    const r = motorRated(inst.params, sysOf(ctx.env).Vll);
     const I = m3.lineCurrents(inst, ctx);
     const modeText = { stop: 'Fermo', start: 'Avviamento', run: 'In marcia', stall: 'BLOCCATO (manca una fase)' }[s.mode];
     let Pabs = 0;

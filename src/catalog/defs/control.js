@@ -1,7 +1,7 @@
 // Comando, automazione, segnalazione e misura su guida DIN.
 import { sw, res, coil, T, P, coilUpdate, clamp } from './common.js';
 import { cabs, csub, power } from '../../sim/complex.js';
-import { V_PHASE, fmtA, fmtV, fmtW, fmt } from '../../sim/norms.js';
+import { V_PHASE, sysOf, fmtA, fmtV, fmtW, fmt } from '../../sim/norms.js';
 
 const ucParam = (def = 230) => P.select('Uc', 'Tensione della bobina Uc', [
   { value: 230, label: '230 V c.a.' },
@@ -145,15 +145,15 @@ export const kt = {
     T('A2', 'A2', 'coil', 'bottom', 0.27), T('18', '18', 'L', 'bottom', 0.73, 'load'),
   ],
   init: () => ({ coil: false, burnt: false, remaining: 0, vcoil: 0 }),
-  elements(inst) {
+  elements(inst, env) {
     const s = inst.state;
-    return [s.burnt ? null : coil('coil', 'A1', 'A2', V_PHASE, 3, 0.6), sw('c', '15', '18', s.remaining > 0)];
+    return [s.burnt ? null : coil('coil', 'A1', 'A2', sysOf(env).Vph, 3, 0.6), sw('c', '15', '18', s.remaining > 0)];
   },
   evaluate(inst, ctx) {
     const s = inst.state;
     const was = s.coil;
     const wasBurnt = s.burnt;
-    coilUpdate(inst, ctx, 'A1', 'A2', V_PHASE);
+    coilUpdate(inst, ctx, 'A1', 'A2', sysOf(ctx.env).Vph);
     if (s.burnt !== wasBurnt) return true;
     if (s.coil && !was) {
       const wasOn = s.remaining > 0;
@@ -182,8 +182,8 @@ export const kt = {
   },
   paths: () => [['15', '18']],
   coilTerms: ['A1', 'A2'],
-  readouts: (inst) => [
-    ...coilReadouts(inst.state, V_PHASE),
+  readouts: (inst, ctx) => [
+    ...coilReadouts(inst.state, sysOf(ctx.env).Vph),
     { label: 'Uscita 15-18', value: inst.state.remaining > 0 ? `Chiusa — ancora ${fmt(inst.state.remaining, 0)} s` : 'Aperta', level: inst.state.remaining > 0 ? 'ok' : 'off' },
   ],
 };
@@ -204,10 +204,10 @@ export const kcr = {
     T('15', '15', 'L', 'bottom', 0.25, 'line'), T('18', '18', 'L', 'bottom', 0.75, 'load'),
   ],
   init: () => ({ out: false, powered: false }),
-  elements: (inst) => [res('aux', 'L', 'N', (V_PHASE * V_PHASE) / 1.5), sw('c', '15', '18', inst.state.out)],
+  elements: (inst, env) => [res('aux', 'L', 'N', (sysOf(env).Vph ** 2) / 1.5), sw('c', '15', '18', inst.state.out)],
   evaluate(inst, ctx) {
     const s = inst.state;
-    s.powered = cabs(ctx.Vd('L', 'N')) > 0.8 * V_PHASE;
+    s.powered = cabs(ctx.Vd('L', 'N')) > 0.8 * sysOf(ctx.env).Vph;
     const lux = ctx.env.lux ?? 400;
     // isteresi del 30% per evitare accensioni intermittenti al tramonto
     const dark = s.out ? lux < inst.params.lux * 1.3 : lux < inst.params.lux;

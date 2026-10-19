@@ -123,15 +123,12 @@ export class Overlays {
 
   tick() {
     const app = this.app;
-    const sup = app.sim.getInst('XA');
-    if (!sup) return;
-    const s = sup.state;
-    const on = s.on && !s.limiter;
-    this.powerBtn.className = 'power-btn' + (s.limiter ? ' fault' : on ? ' on' : '');
-    this.powerBtn.querySelector('.txt').textContent = s.limiter ? 'Contatore distaccato' : on ? 'Impianto alimentato' : 'Impianto non alimentato';
-    const vln = app.sim.measureV({ c: 'XA', t: 'L1' }, { c: 'XA', t: 'N' });
+    const s = app.sim.powerState();
+    this.powerBtn.className = 'power-btn' + (s.fault ? ' fault' : s.on ? ' on' : '');
+    this.powerBtn.querySelector('.txt').textContent = s.label;
     const I = Math.max(...s.I);
-    const html = `<div class="meter"><span>Tensione</span><b>${fmtV(vln)}</b></div><div class="meter"><span>Corrente</span><b>${fmtA(I)}</b></div><div class="meter"><span>Potenza</span><b>${fmtW(s.P)}</b></div><div class="meter"><span>Energia</span><b>${fmt(s.kWh, 3)} kWh</b></div>`;
+    const freq = s.kind === 'genset' && s.on ? `<div class="meter"><span>Frequenza</span><b>${fmt(s.fBus, 1)} Hz</b></div>` : '';
+    const html = `<div class="meter"><span>Tensione</span><b>${fmtV(s.V)}</b></div>${freq}<div class="meter"><span>Corrente</span><b>${fmtA(I)}</b></div><div class="meter"><span>Potenza</span><b>${fmtW(s.P)}</b></div><div class="meter"><span>Energia</span><b>${fmt(s.kWh, 3)} kWh</b></div>`;
     if (this.meters._h !== html) {
       this.meters.innerHTML = html;
       this.meters._h = html;
@@ -166,7 +163,7 @@ export class Overlays {
       const n = p.wiresAt(x.term.ref).length;
       const role = { L: 'fase', N: 'neutro', PE: 'terra (PE)', coil: 'bobina', aux: 'contatto ausiliario', ctrl: 'comando' }[x.term.def.role] || '';
       let v = '';
-      if (app.sim.getInst('XA')?.state.on) {
+      if (app.sim.powerState().on) {
         const V = cabs(app.sim.terminalV(x.term.compId, x.term.ref.t));
         v = ` · ${fmtV(V)} verso terra`;
       }

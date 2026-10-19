@@ -108,7 +108,7 @@ export class Presenter {
         h('h2', { style: { margin: '6px 0 4px', fontFamily: 'var(--font-ui)', fontSize: '24px' } }, m.title),
         h('div', { class: 'muted' }, [m.author, m.classe, m.school].filter(Boolean).join(' · ') || 'Studente / classe non indicati'),
         m.description ? h('p', { class: 'help-text', style: { color: 'var(--text)', fontSize: '14px' } }, m.description) : null,
-        h('p', { class: 'help-text' }, `${p.components.filter((c) => !DEFS[c.type].fixed).length} componenti · ${p.wires.filter((w) => !w.fixed).length} conduttori · alimentazione ${p.params('XA').sys === '3F' ? 'trifase 400 V' : 'monofase 230 V'}, sistema ${p.params('XA').earth}`),
+        h('p', { class: 'help-text' }, `${p.components.filter((c) => !DEFS[c.type].fixed).length} componenti · ${p.wires.filter((w) => !w.fixed).length} conduttori · alimentazione ${p.system().sys === '3F' ? `trifase ${p.system().Vll} V` : `monofase ${p.system().Vph} V`} ${p.system().f} Hz, sistema ${p.system().earth}`),
         nav);
     } else if (s.kind === 'scelte') {
       // giustificazione delle scelte (Fase 4: presentazione della configurazione adottata)
